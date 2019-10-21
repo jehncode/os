@@ -57,7 +57,7 @@ void setRoomType(struct Room*, int);
 void makeConnections(struct Room*, int);
 int contains(int*, int, int);
 char* typeStr(enum room_type);
-void printRooms(struct Room*, int); // for debugging
+void printRooms(const struct Room*, int); // for debugging
 
 void createDirectory(char*);
 void createRoomFiles(const struct Room*, int, const char*); 
@@ -95,6 +95,7 @@ struct Room* initRooms(int n) {
   // set up room connections
   makeConnections(rooms, n);
 
+  // printRooms(rooms, NUM_ROOMS);  // debugging
   return rooms;
 }
 
@@ -198,15 +199,14 @@ void createRoomFiles(const struct Room* rooms, int n, const char* dir) {
     return;
   }
 
-  // FILE* file;
+  FILE* file;
 
   int i;
   for (i = 0; i < n; i++) {
-    const struct Room* room = &room[i];
-    char* filename = ROOM_NAMES[room->name];
-    printf("room->namee = %d\n", room->name);
+    const struct Room* room = &rooms[i];
+    const char* filename = ROOM_NAMES[room->name];
     printf("filename = %s\n", filename);
-    /*
+
     file = fopen(filename, "w");    // create file with write permissions
 
     // write room name to file
@@ -221,10 +221,9 @@ void createRoomFiles(const struct Room* rooms, int n, const char* dir) {
     
     // write room type to file
     fprintf(file, "ROOM TYPE: %s\n\n", typeStr(room->type));
-    */
   }
 
-  //fclose(file);
+  fclose(file);
   printf("files have been written\n");
 }
 
@@ -233,7 +232,7 @@ void createRoomFiles(const struct Room* rooms, int n, const char* dir) {
  * @param rooms
  * @param n: number of rooms
  * ***************************************************************************/
-void printRooms(struct Room* rooms, int n) {
+void printRooms(const struct Room* rooms, int n) {
   int i;
   for (i = 0; i < n; i++) {
     const struct Room* room = &rooms[i];
@@ -275,7 +274,7 @@ char* typeStr(enum room_type type) {
 int main() {
   srand(time(0));   // use current time to seed for random generator
   struct Room* rooms = initRooms(NUM_ROOMS);
-  printRooms(rooms, NUM_ROOMS);  // debugging
+  // printRooms(rooms, NUM_ROOMS);  // debugging
 
   // create directory for rooms
   char dir[BUFFER];
