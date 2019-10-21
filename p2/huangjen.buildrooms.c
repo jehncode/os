@@ -13,7 +13,7 @@
 #include <sys/types.h>
 #include <time.h> 
 
-#define DIRPREFIX "huangjen.rooms."
+#define DIRPREFIX "./huangjen.rooms."
 #define BUFFER 32 
 #define NAME_LEN 8
 #define NUM_ROOMS 7 // number of rooms to create
@@ -59,9 +59,8 @@ int contains(int*, int, int);
 char* typeStr(enum room_type);
 void printRooms(struct Room*, int); // for debugging
 
-char* createDirectory();
-void createRoomFiles();
-
+void createDirectory(char*);
+void createRoomFiles(const struct Room*, int, const char*); 
 
 /* ****************************************************************************
  * Description: creates the rooms and initializes values
@@ -99,7 +98,6 @@ struct Room* initRooms(int n) {
   return rooms;
 }
 
-
 /* ****************************************************************************
  * Description: selects the START and END rooms
  * @param rooms: array of rooms
@@ -130,7 +128,6 @@ void makeConnections(struct Room* rooms, int n) {
   int i = 0;
   for (i = 0; i < n; i++) {
     struct Room* room = &rooms[i];    // current room 
-    int curr = room->name;            // curr room's name
 
     struct Room* sele;                // room to connect with curr
 
@@ -178,35 +175,58 @@ int contains(int* arr, int n, int val) {
  * Description: creates a directory and returns the name of the directory
  * @param n: number of rooms
  * ***************************************************************************/
-char* createDirectory() {
+void createDirectory(char* dir) {
   int permission = 0755;  // permissions for directory
-  char dir[BUFFER]; // name of directory being created
-  sprintf(dir, "%s%d", DIRPREFIX, getpid());  // set name of directory
-  // mkdir(dir, permission); // make directory and set permissions
-  return dir;
+  //char dir[BUFFER];       // name of directory being created
+
+  sprintf(dir, "%s%d", DIRPREFIX, getpid());  // name of directory
+  mkdir(dir, permission); // make directory and set permissions
+  printf("directory created: %s\n", dir);
+
+  //return dir;
 }
 
 /* ****************************************************************************
- * MAIN FUNCTION
+ * Description: creates files for each room in a specified directory 
+ * @param rooms
+ * @param n
+ * @param dir
  * ***************************************************************************/
-int main() {
-  srand(time(0));   // use current time to seed for random generator
-  struct Room* rooms = initRooms(NUM_ROOMS);
+void createRoomFiles(const struct Room* rooms, int n, const char* dir) {
+  if (chdir(dir) != 0) {
+    printf("error: could not access %s\n", dir);
+    return;
+  }
 
-  // create directory for rooms
-  char* directory = createDirectory();
+  // FILE* file;
 
-  // generate 7 room files
+  int i;
+  for (i = 0; i < n; i++) {
+    const struct Room* room = &room[i];
+    char* filename = ROOM_NAMES[room->name];
+    printf("room->namee = %d\n", room->name);
+    printf("filename = %s\n", filename);
+    /*
+    file = fopen(filename, "w");    // create file with write permissions
 
-  printRooms(rooms, NUM_ROOMS);  // debugging
+    // write room name to file
+    fprintf(file, "ROOM NAME: %s\n", ROOM_NAMES[room->name]);
+    
+    // write connections to file
+    int j;
+    for (j = 0; j < room->n_conn; j++) {
+      fprintf(file, "CONNECTION %d: %s\n", j + 1, 
+        ROOM_NAMES[room->outbounds[j]]);
+    }
+    
+    // write room type to file
+    fprintf(file, "ROOM TYPE: %s\n\n", typeStr(room->type));
+    */
+  }
 
-  //free rooms
-  free(rooms);
-  return 0;
-
+  //fclose(file);
+  printf("files have been written\n");
 }
-
-
 
 /* ****************************************************************************
  * Description: prints information for rooms, used for debuggin
@@ -248,3 +268,23 @@ char* typeStr(enum room_type type) {
   }
   return "";
 }
+
+/* ****************************************************************************
+ * MAIN FUNCTION
+ * ***************************************************************************/
+int main() {
+  srand(time(0));   // use current time to seed for random generator
+  struct Room* rooms = initRooms(NUM_ROOMS);
+  printRooms(rooms, NUM_ROOMS);  // debugging
+
+  // create directory for rooms
+  char dir[BUFFER];
+  createDirectory(dir);
+  createRoomFiles(rooms, NUM_ROOMS, dir);
+
+  //free rooms
+  free(rooms);
+  return 0;
+}
+
+
