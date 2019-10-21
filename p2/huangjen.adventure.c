@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <time.h> // for rand
 
-#define FILEPREFIX "huangjen.rooms."
+#define DIRPREFIX "./huangjen.rooms."
 
 /* ****************************************************************************
  * Description: returns array of the randomly-selected rooms
@@ -19,6 +19,7 @@
  * ***************************************************************************/
 
 int main() {
+  int steps = 0;
 
   // create directory for rooms
   

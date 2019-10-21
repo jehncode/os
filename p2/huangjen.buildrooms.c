@@ -178,11 +178,9 @@ int contains(int* arr, int n, int val) {
  * ***************************************************************************/
 void createDirectory(char* dir) {
   int permission = 0755;  // permissions for directory
-  //char dir[BUFFER];       // name of directory being created
 
   sprintf(dir, "%s%d", DIRPREFIX, getpid());  // name of directory
   mkdir(dir, permission); // make directory and set permissions
-  printf("directory created: %s\n", dir);
 
   //return dir;
 }
@@ -205,7 +203,6 @@ void createRoomFiles(const struct Room* rooms, int n, const char* dir) {
   for (i = 0; i < n; i++) {
     const struct Room* room = &rooms[i];
     const char* filename = ROOM_NAMES[room->name];
-    printf("filename = %s\n", filename);
 
     file = fopen(filename, "w");    // create file with write permissions
 
@@ -224,7 +221,6 @@ void createRoomFiles(const struct Room* rooms, int n, const char* dir) {
   }
 
   fclose(file);
-  printf("files have been written\n");
 }
 
 /* ****************************************************************************
