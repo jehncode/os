@@ -1,0 +1,347 @@
+#!/bin/bash
+
+#------------------------------------------------------------------------------
+#dims() prints dims of matrix as num of rows followed by num of columns
+dims() {
+  #echo "dims() called"
+  matrix=$1
+  cat $matrix
+  rows=0
+  cols=0
+
+  #count number of rows
+  while read myLine
+    do
+      rows=$(($rows + 1)) #increment row count 
+      echo "rows: $rows"
+      if [[ $rows -eq 1 ]]; then    #count cols considering first row
+        for i in $myLine
+        do
+          cols=$(($cols + 1)) #increment col count
+        done
+      fi
+    done < $matrix
+
+  #print number of rows and columns, respectively
+  echo "$rows $cols"
+
+  #do not exit since this function is used for other functions
+}
+
+#------------------------------------------------------------------------------
+#transpose() reflects the elements of MxN matrix along the main diagonal
+#prints the transposed NxM matrix with values along the main diagonal unchanged
+transpose() {
+  #echo "transpose() called"
+  #cat $1
+
+  matrixFile=$1
+  tempRow="temprowfile"
+
+  #get number of cols from first line
+  cols=$(head -n 1 $matrixFile | wc -w)
+  #echo "cols = $cols"
+
+  #transform each column into row
+  i=1
+  while [[ $i -le $cols ]]    #go through each col
+    do
+      #save each column into temp variable 
+      #to transform each col into a row, change each new line char to tab char
+      tempCol=$(cut -f $i $matrixFile | tr '\n' '\t') #> $tempCol$$
+
+      #to remove last character in row (the tab character)
+      tempCol=${tempCol%?}
+      
+      #append row file to include current transformed col
+	    echo $tempCol | tr ' ' '\t' >> $tempRow$$
+      #cat $tempRow$$
+      i=`expr $i + 1`
+    done
+
+  cat $tempRow$$
+  rm $tempRow$$
+
+  #do not exit since this function is used for other functions
+}
+
+#------------------------------------------------------------------------------
+#adds two matrices of MxN together element-wise to produce an MxN matrix
+#returns an error if the matrices do not have the same dimensions
+add() {
+  #echo "add() called"
+  m1=$1
+  m2=$2
+  #cat $mdims
+  
+  #check if matrices have matching dimensions, save each dims in var
+  dim1=$(dims $m1)
+  dim2=$(dims $m2)
+  #echo "dims1=$dim1  dims2=$dim2"
+
+  if [[ "$dim1" != "$dim2" ]]; then   #compare dims to see if it matches
+	  echo "error: matrix dimensions do not match" 1>&2
+	  exit 1
+  fi
+
+  #dimensions match so proceed with add function
+  #store dimensions for iterations
+  rows=$(echo $dim1 | cut -d' ' -f 1)
+  cols=$(echo $dim1 | cut -d' ' -f 2)
+
+  #temp files for matrix rows
+  temprowm1="tempM1rowfile"
+  temprowm2="tempM2rowfile"
+  sumMtx="temprowfile"
+  
+  rIdx=1  #row index
+  while [[ $rIdx -le $rows ]]   #iterate through each row 
+    do
+      #read row of each matrix into their respective temp files
+      #echo "reading rIdx = $rIdx"
+      echo $(head -n $rIdx $m1 | tail -1) | tr ' ' '\t' > $temprowm1
+      echo $(head -n $rIdx $m2 | tail -1) | tr ' ' '\t' > $temprowm2
+      #cat $temprowm1
+      #cat $temprowm2
+
+      #determine sum of each [i][j]
+      cIdx=1  #col index
+      while [[ $cIdx -le $cols ]]   #iterate through each col of row 
+        do
+          #store element of each matrix [i][j] into temp and sum vars
+          temp=$(cut -f $cIdx $temprowm1) 
+          sum=$(cut -f $cIdx $temprowm2)
+          #add the two elements together
+          sum=`expr $sum + $temp`
+
+          #determine if a new line or a tab is needed after each sum row
+          if [[ $cIdx -eq $cols ]]; then 
+            echo "$sum" >> $sumMtx    #new line is needed
+          else
+            echo "$sum" | tr '\n' '\t' >> $sumMtx   #tab char is needed
+          fi
+
+          cIdx=`expr $cIdx + 1`   #increment col index
+        done
+      
+      rIdx=`expr $rIdx + 1`   #increment row index
+    done
+
+  cat $sumMtx
+  rm $temprowm1
+  rm $temprowm2
+  rm $sumMtx
+
+  exit 0
+}
+
+#------------------------------------------------------------------------------
+#mean() returns 1xN row vector containing the mean of each column of MxN matrix
+mean() {
+  #echo "mean() called"
+  #cat -A $1
+  matrix=$1
+  matrixDims=$(dims $matrix)    #get matrix dimensions
+  #echo "$matrixDims"
+
+  rows=$(echo $matrixDims | cut -d' ' -f 1) #note: rows is divisor for mean calc
+  cols=$(echo $matrixDims | cut -d' ' -f 2) 
+  #echo "rows = $rows  cols = $cols"
+
+  #build 1xN mean matrix iterating through each col
+  tempMean="tempmeanfile"
+  colIdx=1
+  while [[ $colIdx -le $cols ]]   #calculate mean for each column
+    do
+      singleCol=$(cut -f $colIdx $matrix)   #store a single column's vals
+
+      sum=1   #accumulating sum of each column
+      for elem in $singleCol   #accumulate to include each row val in sum
+      do
+        sum=$(($sum + $elem))
+      done
+
+      mean=$(($sum / $rows))
+      #echo "$sum" | tr '\n' '\t'
+      
+      #check if mean has to be rounded up based on decimal
+      #note: if remainder  is >= 1/2 * divisor, then mean needs to round up
+      rem=$(($sum % $rows)) #remainder of division
+      limpos=$(($rows / 2))    #limit for pos mean is to be rounded up
+      limneg=`expr $mean \* -1` #limit for if neg mean is to be rounded down
+
+      #check for case if mean is neg, consider to round down
+      if [[ $mean -lt 0 && $rem -le $limneg ]]; then 
+        #echo "rem $rem is <= lim $limneg"
+        mean=$((mean - 1))
+      #check for case if mean is pos, consider to round up
+      elif [[ $mean -ge 0 && $rem -ge $limpos ]]; then
+        #echo "rem $rem is >= lim $limpos"
+        mean=$(($mean + 1))
+      fi
+
+      #save mean to temp file and consider if tab or new line should follow
+      if [[ $colIdx -eq $cols ]]; then
+        echo "$mean" >> $tempMean
+      else 
+        echo "$mean" | tr '\n' '\t' >> $tempMean
+      fi
+
+      colIdx=`expr $colIdx + 1`
+    done
+  
+  cat $tempMean
+  rm $tempMean
+
+  exit 0
+}
+
+#------------------------------------------------------------------------------
+#multiply() takes MxN and NxP matrix and produces MxP product matrix
+#WARNING: THIS FUNCTION MAY TIME OUT WITH LARGE INPUTS
+multiply() {
+  #echo "multiply() called"
+  #cat $1
+  #cat $2
+  m1=$1
+  m2=$2
+  m1Dims=$(dims $m1)
+  m2Dims=$(dims $m2)
+  #check if MxN matrix has equivalent num of cols as NxP's num of rows
+  m1cols=$(echo $m1Dims | cut -d' ' -f 2)   #m1's num of cols
+  m2rows=$(echo $m2Dims | cut -d' ' -f 1)   #m2's num of rows
+  #echo "m1cols = $m1cols  =?  m2rows = $m2rows"
+  
+  if [[ $m1cols -ne $m2rows ]]; then
+    echo "error: invalid matrix dimensions" 1>&2
+    exit 1
+  fi
+
+  #resulting NxP matrix dimensions
+  rows=$(echo $m1Dims | cut -d' ' -f 1)
+  cols=$(echo $m2Dims | cut -d' ' -f 2)
+  #echo "NxP: $rows x $cols"
+  
+  #transpose second matrix for simpler iteration for multiplication
+  m2trans="tempm2transfile"
+  trans=$(transpose $m2) 
+  echo "$trans" >> $m2trans
+  #echo "transposed"
+  #cat $m2trans
+
+  #resultant matrix
+  mulMatrix="tempmulmatrix"
+
+  #do matrix multiplication
+  rIdx=1
+  while [[ $rIdx -le $rows ]] #iterate through each row of MxN matrix
+  do
+    singleRowM1=$(head -n $rIdx $m1 | tail -1) 
+
+    m2rIdx=1
+    while [[ $m2rIdx -le $cols ]] #iterate for each of transposed's rows
+    do
+      singleRowM2=$(head -n $m2rIdx $m2trans | tail -1)
+      #echo "singleRows:"
+      #echo "$singleRowM1"
+      #echo "$singleRowM2"
+
+      #go through each col vals for product sum
+      nIdx=1
+      prodSum=0;
+      while [[ $nIdx -le $m1cols ]]  #in each row, get product sum of each col
+      do
+        temp=$(echo $singleRowM1 | tr ' ' '\t' | cut -f $nIdx)
+        prod=$(echo $singleRowM2 | tr ' ' '\t' | cut -f $nIdx)
+        prod=`expr $prod \* $temp`
+        #echo "prod = $prod"
+        prodSum=$(($prodSum + prod))
+
+        nIdx=$(($nIdx + 1))
+      done
+
+      if [[ $m2rIdx -eq $cols ]]; then
+         echo "$prodSum" >> $mulMatrix    #new line is to follow
+      else
+        echo "$prodSum" | tr '\n' '\t' >> $mulMatrix    #tab to follow
+      fi
+      #echo "prodSum = $prodSum"
+      m2rIdx=$(($m2rIdx + 1))
+    done
+    #rIdx=`expr $rIdx + 1`
+    rIdx=$(($rIdx + 1))
+  done
+
+  cat $mulMatrix
+  rm $m2trans
+  rm $mulMatrix
+
+  exit 0
+}
+
+
+#----------------------------------MAIN SCRIPT---------------------------------
+#function names
+fundims="dims"
+funtrans="transpose"
+funmean="mean"
+funadd="add"
+funmul="multiply"
+
+#check for single-file argument function calls: dims(), transpose(), mean()
+if [[ $1 == $fundims || $1 == $funtrans || $1 == $funmean ]]; then
+  #check for valid number of arguments
+  if [[ $# -gt 2 ]]; then
+    echo "error: invalid number of arguments" 1>&2
+    exit 1
+  fi
+
+  #check if dims(), consider piping
+  if [[ $1 == $fundims ]]; then
+    dims $2
+    exit 0;
+  fi
+  #check for readable file for remainder of functions
+  if [[ -r $2 ]]; then
+    #call function as req'd
+    if [[ $1 == $funtrans ]]; then
+      @1 $2
+      exit 0
+    else
+      mean $2
+    fi
+  else 
+    echo "error: file cannot be accessed" 1>&2
+    exit 1
+  fi
+fi
+
+#check for two-file argument function calls: add(), multiply()
+if [[ $1 == $funadd || $1 == $funmul ]]; then
+  #check for valid number of arguments
+  if [[ $# -ne 3 ]]; then
+    echo "error: invalid number of arguments" 1>&2
+    exit 1
+  fi
+
+  #check for readable files
+  if [[ -r $2 && -r $3 ]]; then
+    if [[ $1 == $funadd ]]; then
+      add $2 $3
+    else 
+      multiply $2 $3
+    fi
+  else
+    echo "error: file cannot be accessed" 1>&2
+    exit 1
+  fi
+fi
+
+#check for bad commands
+if [[ $1 != $fundims && $1 != $funtrans && $1 != $funmean && 
+  $1 != $funadd && $1 != $funmul ]]; then
+  echo "error: bad command" 1>&2
+  exit 1
+fi
+
+exit 0 
