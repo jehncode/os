@@ -16,7 +16,7 @@
 
 #define DIRPREFIX "huangjen.rooms."
 #define BUFFER 32
-#define NAME_LEN 8
+#define NAME_LEN 9 // max 8 + \0
 #define NUM_ROOMS 7
 #define MAX_ROOMS 10
 #define MAX_CONN 6
@@ -203,7 +203,7 @@ void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
      
       // name
       if (strcmp(key, "ROOM NAME\0") == 0) {          
-        sprintf(room->name, "%s\0", key);
+        sprintf(room->name, "%s\0", val);
         printf("room->name set: %s\n", room->name);
       } 
       // connections
@@ -222,6 +222,8 @@ void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
     }
     fclose(roomfile);
   }
+
+  printRooms(rooms, n);
 }
 
 /* ****************************************************************************
@@ -259,7 +261,7 @@ void setRoomInfo(struct Room* rooms, const char* loc, int n) {
   int m = 0; 
   for (; m < n; m++) {
     // space for each file name
-    filenames[m] = (char*) malloc(sizeof(char) * (NAME_LEN + 1));
+    filenames[m] = (char*) malloc(sizeof(char) * (NAME_LEN));
   }
 
   // get the file names
