@@ -182,12 +182,28 @@ void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
     }
 
     // PARSE FILE
-    char* line;
+    char line[BUFFER];
     ssize_t r;
     size_t len = 0;
-    while ((getline(&line, &len, roomfile)) != -1) {
+    while (fgets(line, sizeof(line), roomfile) != NULL) {
       // printf("retrieve line of length: %z\n", read);
       printf("%s", line);
+
+
+
+      // name 
+      char* data = strtok(line, " ");
+      //printf("data: %s\n", data);
+
+      // connections
+      /*
+      while (strcmp("CONNECTION", data) != 0) {
+        fgets(data, len, line);
+        printf("while data: %s\n", data);
+      }
+      */
+
+      // room_type
     }
     fclose(roomfile);
   }
@@ -211,7 +227,7 @@ void setRoomInfo(struct Room* rooms, const char* loc, int n) {
 
   // get the file names
   getRoomFileNames(filenames, loc, n);
-  int i = 0; for (; i < n; i++) printf("filenames %d: %s\n", i+1, filenames[i]);
+  // int i = 0; for (; i < n; i++) printf("filenames %d: %s\n", i+1, filenames[i]);
 
   // read files for room info
   readRoomFiles(rooms, filenames, loc, n);
