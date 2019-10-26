@@ -45,7 +45,8 @@ void initConnections(struct Room* room);
 
 struct Room* getRooms(const char* target, int n);
 void getRoomDir(char* roomdir, const char* targetdir);
-void getRoomFileNames(char* names[], const char* loc, int n);
+void getRoomFileNames(char** names, const char* loc, int n);
+void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n);
 
 void exitDirAccessError();
 void printRooms(const struct Room* rooms, int n);
@@ -162,6 +163,36 @@ void getRoomFileNames(char** names, const char* loc, int n) {
   closedir(dir);
 }
 
+void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
+  char filepath[BUFFER];
+  FILE* roomfile;
+
+  int i = 0;
+  for (; i < n; i++) {
+    // open file
+    memset(filepath, '\0', sizeof(filepath));
+    sprintf(filepath, "./%s/%s", loc, names[i]);
+    printf("filepath: %s\n", filepath);
+
+    roomfile = fopen(filepath, "r+");
+    if (roomfile == NULL) {
+      printf("attempt to access %s\n", filepath);
+      perror("error: could not access file. Proceeding to exit.");
+      exit(101);
+    }
+
+
+    fclose(roomfile);
+  }
+  
+}
+
+/* ****************************************************************************
+ * Description: retrieves and sets room information from files
+ * @param rooms
+ * @param loc
+ * @param n
+ * ***************************************************************************/
 void setRoomInfo(struct Room* rooms, const char* loc, int n) {
   // allocate space to store all room file names
   char** filenames = (char**) malloc(sizeof(char*) * n);
@@ -175,12 +206,15 @@ void setRoomInfo(struct Room* rooms, const char* loc, int n) {
   getRoomFileNames(filenames, loc, n);
   int i = 0; for (; i < n; i++) printf("filenames %d: %s\n", i+1, filenames[i]);
 
+  // read files for room info
+  readRoomFiles(rooms, filenames, loc, n);
+
   // free file names
   int f = 0; for (; f < n; f++) free(filenames[f]);
 }
 
 /* ****************************************************************************
- * Description: retrieves room information from directory
+ * Description: returns rooms retrieved from files
  * @param dir
  * ***************************************************************************/
 struct Room* getRooms(const char* target, int n) {
