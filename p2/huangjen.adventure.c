@@ -48,9 +48,11 @@ void getRoomDir(char* roomdir, const char* targetdir);
 void getRoomFileNames(char** names, const char* loc, int n);
 void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n);
 
+void parseLine(char* line, char* key, char* val);
 void exitDirAccessError();
 void printRooms(const struct Room* rooms, int n);
 char* typeStr(enum room_type type);
+enum room_type typeFromStr(char* str);
 
 /* ****************************************************************************
  * Description: opens the current directory and loops through each file/
@@ -181,33 +183,68 @@ void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
       exit(EXIT_FAILURE);
     }
 
+    struct Room* room = &rooms[i];
+
     // PARSE FILE
     char line[BUFFER];
-    ssize_t r;
-    size_t len = 0;
+    memset(line, '\0', sizeof(line));
     while (fgets(line, sizeof(line), roomfile) != NULL) {
-      // printf("retrieve line of length: %z\n", read);
-      printf("%s", line);
+      // skip if line just contains new line character
+      if (strlen(line) == 1) continue;
 
+      // otherwise, parse line for key & value
+      char key[BUFFER];
+      char val[BUFFER];
+          printf("%s", line);
+      parseLine(line, key, val);
+          printf("key: %s\t val: %s\n", key, val);
 
-
-      // name 
-      char* data = strtok(line, " ");
-      //printf("data: %s\n", data);
-
+      // set room info based on key
+     
+      // name
+      if (strcmp(key, "ROOM NAME\0") == 0) {          
+        sprintf(room->name, "%s\0", key);
+        printf("room->name set: %s\n", room->name);
+      } 
       // connections
-      /*
-      while (strcmp("CONNECTION", data) != 0) {
-        fgets(data, len, line);
-        printf("while data: %s\n", data);
+      if (strcmp(key, "CONNECTION ") == 0) {   
+        sprintf(room->outbounds[room->n++], "%s\0", val);
+        printf("room connection added: %s\n", room->outbounds[room->n - 1]);
       }
-      */
 
       // room_type
+      if (strcmp(key, "ROOM TYPE\0") == 0) {
+        room->type = typeFromStr(val);
+        printf("room type set: %s\n", typeStr(room->type)); 
+      }
+      memset(line, '\0', sizeof(line));
+            printf("\n");
     }
     fclose(roomfile);
   }
+}
+
+/* ****************************************************************************
+ * Description: parses a line for a key and value used to extract room info 
+ * from file lines
+ * @param line
+ * @param key
+ * @param val
+ * ***************************************************************************/
+void parseLine(char* line, char* key, char* val) {
+  // clear buffer
+  memset(key, '\0', sizeof(key));
+  memset(val, '\0', sizeof(val)); 
+
+  // parse for key
+  strcpy(key, line);
+  printf("copied line to key: %s", key);
+  sprintf(key, "%s\0", strtok(line, ":123456790"));
+
+  // parse for value
+  sprintf(val, "%s\0", strtok(NULL, ": \n")); 
   
+  // printf("key: %s\t val: %s\n", key, val);
 }
 
 /* ****************************************************************************
@@ -296,6 +333,20 @@ char* typeStr(enum room_type type) {
   }
   return "";
 }
+
+/* ****************************************************************************
+ * Description: returns type based on room_type as a string
+ * @param str
+ * ***************************************************************************/
+enum room_type typeFromStr(char* str) {
+  if (strcmp(str, "START_ROOM") == 0) {
+    return START_ROOM;
+  }
+  if (strcmp(str, "END_ROOM") == 0) {
+    return END_ROOM;
+  }
+  return MID_ROOM;
+} 
 
 /* ****************************************************************************
  * Description: print error message for directory acces failure and exit
