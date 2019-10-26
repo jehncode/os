@@ -40,10 +40,16 @@ struct Room {
 /* ****************************************************************************
  * function declarations 
  * ***************************************************************************/
-void getRoomDir(char* roomdir, const char* targetdir);
 struct Room* initRooms(const int n);
 void initConnections(struct Room* room);
+
 struct Room* getRooms(const char* target, int n);
+void getRoomDir(char* roomdir, const char* targetdir);
+void getRoomFileNames(char* names[], const char* loc, int n);
+
+void exitDirAccessError();
+void printRooms(const struct Room* rooms, int n);
+char* typeStr(enum room_type type);
 
 /* ****************************************************************************
  * Description: opens the current directory and loops through each file/
@@ -67,8 +73,7 @@ void getRoomDir(char* roomdir, const char* targetdir) {
   tocheck = opendir("."); // open directory this prog is run in
 
   if (tocheck == NULL) {    // check if curr dir could be opened
-    printf("error: current directory could not be accessed\n");
-    printf("exitiing program\n");
+    exitDirAccessError();
     exit(100);
   }
 
@@ -114,7 +119,7 @@ void initConnections(struct Room* room) {
  * ***************************************************************************/
 struct Room* initRooms(const int n) {
   struct Room* rooms = (struct Room*) malloc(sizeof(struct Room) * NUM_ROOMS);
-  
+
   int i = 0;
   for (; i < n; i++) {
     struct Room* room = &rooms[i];
@@ -127,38 +132,139 @@ struct Room* initRooms(const int n) {
 }
 
 /* ****************************************************************************
+ * Description: returns room file names 
+ * @param rooms
+ * @param loc
+ * @param n
+ * ***************************************************************************/
+void getRoomFileNames(char** names, const char* loc, int n) {
+  DIR* dir = opendir(loc); // pointer to directory
+  if (dir == NULL) {
+    printf("attempting to access: %s\n", loc);
+    exitDirAccessError();
+    exit(100);
+  }
+
+  struct dirent* file;
+  int ct = 0;
+  while ( (file = readdir(dir)) != NULL) {
+    if (!isalpha(file->d_name[0])) continue;  // ignore "." and ".."
+    // save file names  
+    memset(names[ct], '\0', sizeof(names[ct]));
+    sprintf(names[ct], "%s\0", file->d_name);
+    ct++;
+  }
+
+  // debug, print file names
+  // int i = 0; for (; i < n; i++) printf("filenames %d: %s\n", i+1, names[i]);
+  
+  //printRooms(rooms, n);
+  closedir(dir);
+}
+
+void setRoomInfo(struct Room* rooms, const char* loc, int n) {
+  // allocate space to store all room file names
+  char** filenames = (char**) malloc(sizeof(char*) * n);
+  int m = 0; 
+  for (; m < n; m++) {
+    // space for each file name
+    filenames[m] = (char*) malloc(sizeof(char) * (NAME_LEN + 1));
+  }
+
+  // get the file names
+  getRoomFileNames(filenames, loc, n);
+  int i = 0; for (; i < n; i++) printf("filenames %d: %s\n", i+1, filenames[i]);
+
+  // free file names
+  int f = 0; for (; f < n; f++) free(filenames[f]);
+}
+
+/* ****************************************************************************
  * Description: retrieves room information from directory
  * @param dir
  * ***************************************************************************/
 struct Room* getRooms(const char* target, int n) {
   // get latest room file directory
-  char roomdir[BUFFER];
-  getRoomDir(roomdir, target);
+  char location[BUFFER];
+  // sprintf(location, "./%s", roomdir);
+  getRoomDir(location, target);
+  printf("getRooms() location = %s\n", location);
 
   // initialize rooms
   struct Room* rooms = initRooms(n);
 
-  // populate room information
+  // retrieve room info 
+  setRoomInfo(rooms, location, n);
 
   return rooms;
+}
+
+/* ****************************************************************************
+ * Description: prints information for rooms, used for debugging
+ * @param rooms
+ * @param n: number of rooms
+ * ***************************************************************************/
+void printRooms(const struct Room* rooms, int n) {
+  int i;
+  for (i = 0; i < n; i++) {
+    const struct Room* room = &rooms[i];
+    // print room name
+    printf("ROOM NAME: %s\n", room->name);
+
+    // print connections
+    int j;
+    for (j = 0; j < room->n; j++) {
+      printf("CONNECTION %d: %s\n", j + 1, room->outbounds[j]);
+    }
+
+    // print room type
+    printf("ROOM TYPE: %s\n\n", typeStr(room->type));
+  }
+  return;
+}
+
+/* ****************************************************************************
+ * Description: returns room_type as a string
+ * @param type
+ * ***************************************************************************/
+char* typeStr(enum room_type type) {
+  if (type == START_ROOM) {
+    return "START_ROOM";
+  }
+  if (type == MID_ROOM) {
+    return "MID_ROOM";
+  }
+  if (type == END_ROOM) {
+    return "END_ROOM";
+  }
+  return "";
+}
+
+/* ****************************************************************************
+ * Description: print error message for directory acces failure and exit
+ * ***************************************************************************/
+void exitDirAccessError() {
+  perror("error: directory could not be accessed. Proceeding to exit.\n");
+  exit(100);
 }
 
 /* ****************************************************************************
  * Description: returns array of the randomly-selected rooms
  * @param n: number of rooms to create
  * ***************************************************************************/
-
 int main() {
+  // set up room file search
   char targetdir[BUFFER];
   sprintf(targetdir, "%s", DIRPREFIX);
-  //openRoomDir(dir);
+  memset(targetdir, '\0', sizeof(targetdir));
+  strcpy(targetdir, DIRPREFIX);
 
-
-  int steps = 0;  // track number of steps (rooms visited) of path
-  char path[MAX_PATH][NAME_LEN];  // player's path
-
+  // retrieve room info
   struct Room* rooms = getRooms(targetdir, NUM_ROOMS);
 
+  // game
+  int steps = 0;  // track number of steps (rooms visited) of path
+  char path[MAX_PATH][NAME_LEN];  // player's path
 
   // generate 7 room files
 
