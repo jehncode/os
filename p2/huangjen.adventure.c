@@ -178,10 +178,17 @@ void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
     if (roomfile == NULL) {
       printf("attempt to access %s\n", filepath);
       perror("error: could not access file. Proceeding to exit.");
-      exit(101);
+      exit(EXIT_FAILURE);
     }
 
-
+    // PARSE FILE
+    char* line;
+    ssize_t r;
+    size_t len = 0;
+    while ((getline(&line, &len, roomfile)) != -1) {
+      // printf("retrieve line of length: %z\n", read);
+      printf("%s", line);
+    }
     fclose(roomfile);
   }
   
