@@ -174,7 +174,7 @@ void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
     // open file
     memset(filepath, '\0', sizeof(filepath));
     sprintf(filepath, "./%s/%s", loc, names[i]);
-    printf("filepath: %s\n", filepath);
+    // printf("filepath: %s\n", filepath);
 
     roomfile = fopen(filepath, "r+");
     if (roomfile == NULL) {
@@ -186,8 +186,10 @@ void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
     struct Room* room = &rooms[i];
 
     // PARSE FILE
-    char line[BUFFER];
-    memset(line, '\0', sizeof(line));
+    char line[BUFFER];    // holds line of file
+    memset(line, '\0', sizeof(line)); // clear buffer
+    
+    // go through each line and parse key/value to assign room info
     while (fgets(line, sizeof(line), roomfile) != NULL) {
       // skip if line just contains new line character
       if (strlen(line) == 1) continue;
@@ -195,35 +197,37 @@ void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n) {
       // otherwise, parse line for key & value
       char key[BUFFER];
       char val[BUFFER];
-          printf("%s", line);
+          // printf("%s", line);
       parseLine(line, key, val);
-          printf("key: %s\t val: %s\n", key, val);
+          // printf("key: %s\t val: %s\n", key, val);
 
-      // set room info based on key
-     
+    // set room info based on key
       // name
-      if (strcmp(key, "ROOM NAME\0") == 0) {          
+      if (strcmp(key, "ROOM NAME") == 0) {          
         sprintf(room->name, "%s\0", val);
-        printf("room->name set: %s\n", room->name);
+        // printf("room->name set: %s\n", room->name);
       } 
       // connections
       if (strcmp(key, "CONNECTION ") == 0) {   
         sprintf(room->outbounds[room->n++], "%s\0", val);
-        printf("room connection added: %s\n", room->outbounds[room->n - 1]);
+        // printf("room connection added: %s\n", room->outbounds[room->n - 1]);
+      }
+      // room_type
+      if (strcmp(key, "ROOM TYPE") == 0) {
+        room->type = typeFromStr(val);
+        // printf("room type set: %s\n", typeStr(room->type)); 
       }
 
-      // room_type
-      if (strcmp(key, "ROOM TYPE\0") == 0) {
-        room->type = typeFromStr(val);
-        printf("room type set: %s\n", typeStr(room->type)); 
-      }
+      // reset line buffer
       memset(line, '\0', sizeof(line));
-            printf("\n");
     }
+
+    // close file
     fclose(roomfile);
+            // printf("\n");
   }
 
-  printRooms(rooms, n);
+  // printRooms(rooms, n);
 }
 
 /* ****************************************************************************
@@ -239,14 +243,10 @@ void parseLine(char* line, char* key, char* val) {
   memset(val, '\0', sizeof(val)); 
 
   // parse for key
-  strcpy(key, line);
-  printf("copied line to key: %s", key);
   sprintf(key, "%s\0", strtok(line, ":123456790"));
 
   // parse for value
   sprintf(val, "%s\0", strtok(NULL, ": \n")); 
-  
-  // printf("key: %s\t val: %s\n", key, val);
 }
 
 /* ****************************************************************************
@@ -284,7 +284,7 @@ struct Room* getRooms(const char* target, int n) {
   char location[BUFFER];
   // sprintf(location, "./%s", roomdir);
   getRoomDir(location, target);
-  printf("getRooms() location = %s\n", location);
+  // printf("getRooms() location = %s\n", location);
 
   // initialize rooms
   struct Room* rooms = initRooms(n);
