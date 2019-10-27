@@ -58,6 +58,7 @@ void startGame(struct Room* rooms, int n, struct Room* startroom);
 struct Room* getStartRoom(struct Room* rooms, int n);
 struct Room* findRoom(struct Room* rooms, int n, const char* search);
 void printConnections(const struct Room* room);
+void printPath(char** path, int n);
 /* ****************************************************************************
  * Description: opens the current directory and loops through each file/
  * subdirectory inside it looking for the entries that begins with the target
@@ -378,6 +379,18 @@ void printConnections(const struct Room* room) {
 }
 
 /* ****************************************************************************
+ * Description: print path
+ * @param path
+ * @param n
+ * ***************************************************************************/
+void printPath(char** path, int n) {
+  int i = 0;
+  for (; i < n; i++) {
+    printf("%d\t%s\n", i + 1, path[i]);
+  }
+}
+
+/* ****************************************************************************
  * Description: returns pointer to the start room 
  * @param rooms
  * @param n
@@ -420,6 +433,7 @@ struct Room* findRoom(struct Room* rooms, int n, const char* search) {
   return NULL;
 }
 
+
 /* ****************************************************************************
  * Description: function for running room game
  * @param rooms
@@ -430,8 +444,17 @@ void startGame(struct Room* rooms, int n, struct Room* startroom) {
   // track user's current location
   struct Room* currloc = startroom;
 
-  // int steps = 0;  // track number of steps (rooms visited) of path
-  // char path[MAX_PATH][NAME_LEN];  // player's path
+  // track number of steps (rooms visited)
+  int steps = 0;  
+
+  // set up for player's path
+  char** path = (char**) malloc(sizeof(char*) * MAX_PATH);
+  int m = 0;
+  for (; m < MAX_PATH; m++) {
+    // space for each room in path
+    path[m] = (char*) malloc(sizeof(char) * NAME_LEN);
+    memset(path[m], '\0', sizeof(path[m]));
+  }
 
   // track user's input
   char input[BUFFER];
@@ -449,14 +472,28 @@ void startGame(struct Room* rooms, int n, struct Room* startroom) {
     scanf("%s", input);
 
     printf("\n");
+
     // validate user input
     if (findRoom(rooms, n, input) == NULL) { 
       printf("HUH? I DON'T UNDERSTAND THAT ROOM. TRY AGAIN.\n\n");
       continue;
     } 
 
+    
+    // sprintf(path[steps], "%s\0", currloc->name);
     currloc = findRoom(rooms, n, input);
+    strcpy(path[steps++], currloc->name);
   }
+
+  if (currloc->type == END_ROOM) {
+    // print victory
+    printf("YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!\n");
+    printf("YOU TOOK %d STEP(S). YOUR PATH TO VICTORY WAS:\n", steps);
+    printPath(path, steps);
+  }
+
+  // free path mem
+  int f = 0; for (; f < MAX_PATH; f++) free(path[f]);
 }
 
 /* ****************************************************************************
