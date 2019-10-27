@@ -12,13 +12,13 @@
 #include <sys/types.h>
 #include <dirent.h> 
 #include <unistd.h>
+#include <pthread.h>
 #include <time.h>
 
 #define DIRPREFIX "huangjen.rooms."
 #define BUFFER 32
 #define NAME_LEN 9 // max 8 + \0
 #define NUM_ROOMS 7
-#define MAX_ROOMS 10
 #define MAX_CONN 6
 #define MAX_PATH 100
 
@@ -40,25 +40,35 @@ struct Room {
 /* ****************************************************************************
  * function declarations 
  * ***************************************************************************/
+// initialization for room
 struct Room* initRooms(const int n);
 void initConnections(struct Room* room);
 
+// file and room info
 struct Room* getRooms(const char* target, int n);
 void getRoomDir(char* roomdir, const char* targetdir);
 void getRoomFileNames(char** names, const char* loc, int n);
 void readRoomFiles(struct Room* rooms, char** names, const char* loc, int n);
-
 void parseLine(char* line, char* key, char* val);
+
+// print
+void printConnections(const struct Room* room);
+void printPath(char** path, int n);
 void exitDirAccessError();
 void printRooms(const struct Room* rooms, int n);
+
+// type helpers
 char* typeStr(enum room_type type);
 enum room_type typeFromStr(char* str);
 
+// game play
 void startGame(struct Room* rooms, int n, struct Room* startroom);
 struct Room* getStartRoom(struct Room* rooms, int n);
 struct Room* findRoom(struct Room* rooms, int n, const char* search);
-void printConnections(const struct Room* room);
-void printPath(char** path, int n);
+
+// time threading
+void timethread();
+
 /* ****************************************************************************
  * Description: opens the current directory and loops through each file/
  * subdirectory inside it looking for the entries that begins with the target
@@ -470,6 +480,16 @@ void startGame(struct Room* rooms, int n, struct Room* startroom) {
     printf("WHERE TO? >");
     // scan input
     scanf("%s", input);
+    
+    // check for time input
+    while (strcmp(input, "time") == 0) {
+      // thread and print time
+      timethread();
+      // print prompt for next location
+      printf("\nWHERE TO? >");
+      // scan input
+      scanf("%s", input);
+    }
 
     printf("\n");
 
@@ -479,12 +499,12 @@ void startGame(struct Room* rooms, int n, struct Room* startroom) {
       continue;
     } 
 
-    
     // sprintf(path[steps], "%s\0", currloc->name);
     currloc = findRoom(rooms, n, input);
     strcpy(path[steps++], currloc->name);
   }
 
+  // print victory message
   if (currloc->type == END_ROOM) {
     // print victory
     printf("YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!\n");
@@ -494,6 +514,10 @@ void startGame(struct Room* rooms, int n, struct Room* startroom) {
 
   // free path mem
   int f = 0; for (; f < MAX_PATH; f++) free(path[f]);
+}
+
+void timethread() {
+
 }
 
 /* ****************************************************************************
