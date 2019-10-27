@@ -54,6 +54,10 @@ void printRooms(const struct Room* rooms, int n);
 char* typeStr(enum room_type type);
 enum room_type typeFromStr(char* str);
 
+void startGame(struct Room* rooms, int n, struct Room* startroom);
+struct Room* getStartRoom(struct Room* rooms, int n);
+struct Room* findRoom(struct Room* rooms, int n, const char* search);
+void printConnections(const struct Room* room);
 /* ****************************************************************************
  * Description: opens the current directory and loops through each file/
  * subdirectory inside it looking for the entries that begins with the target
@@ -359,6 +363,103 @@ void exitDirAccessError() {
 }
 
 /* ****************************************************************************
+ * Description: print connections in the correct format for game
+ * @param rooms
+ * ***************************************************************************/
+void printConnections(const struct Room* room) {
+  int i = 0;
+  for (; i < room->n; i++) {
+    if (i == room->n - 1) {
+      printf("%s.\n", room->outbounds[i]);
+    } else {
+      printf("%s, ", room->outbounds[i]);
+    }
+  }
+}
+
+/* ****************************************************************************
+ * Description: returns pointer to the start room 
+ * @param rooms
+ * @param n
+ * ***************************************************************************/
+struct Room* getStartRoom(struct Room* rooms, int n) {
+  if (rooms == NULL) {
+    return NULL;
+  }
+
+  int i = 0;
+  for (; i < n; i++) {
+    struct Room* room = &rooms[i];
+    if (room->type == START_ROOM) {
+      return &rooms[i];
+    }
+  }
+  return NULL;
+}
+
+/* ****************************************************************************
+ * Description: returns pointer to room of a searched name, 
+ * returns NULL if not found
+ * @param rooms
+ * @param n
+ * @param name
+ * ***************************************************************************/
+struct Room* findRoom(struct Room* rooms, int n, const char* search) {
+  if (rooms == NULL) {
+    return NULL;
+  }
+
+  int i = 0;
+  for (; i < n; i++) {
+    struct Room* room = &rooms[i];
+    if (strcmp(search, room->name) == 0) {
+      return room;
+    }
+  }
+
+  return NULL;
+}
+
+/* ****************************************************************************
+ * Description: function for running room game
+ * @param rooms
+ * @param n
+ * @param startroom
+ * ***************************************************************************/
+void startGame(struct Room* rooms, int n, struct Room* startroom) {
+  // track user's current location
+  struct Room* currloc = startroom;
+
+  // int steps = 0;  // track number of steps (rooms visited) of path
+  // char path[MAX_PATH][NAME_LEN];  // player's path
+
+  // track user's input
+  char input[BUFFER];
+  memset(input, '\0', sizeof(input));
+
+  while (currloc->type != END_ROOM) {
+    // print current location
+    printf("CURRENT LOCATION: %s\n", currloc->name);
+    // print connections
+    printf("POSSIBLE CONNECTIONS: ");
+    printConnections(currloc);
+    // print prompt for next location
+    printf("WHERE TO? >");
+    // scan input
+    scanf("%s", input);
+
+    printf("\n");
+    // validate user input
+    if (findRoom(rooms, n, input) == NULL) { 
+      printf("HUH? I DON'T UNDERSTAND THAT ROOM. TRY AGAIN.\n\n");
+      continue;
+    } 
+
+    currloc = findRoom(rooms, n, input);
+  }
+}
+
+/* ****************************************************************************
  * Description: returns array of the randomly-selected rooms
  * @param n: number of rooms to create
  * ***************************************************************************/
@@ -371,12 +472,14 @@ int main() {
 
   // retrieve room info
   struct Room* rooms = getRooms(targetdir, NUM_ROOMS);
+  struct Room* startroom = getStartRoom(rooms, NUM_ROOMS);
+  if (startroom == NULL) {
+    perror("error: could not set start room. Proceeding to exit\n");
+    exit(101);
+  }
 
-  // game
-  int steps = 0;  // track number of steps (rooms visited) of path
-  char path[MAX_PATH][NAME_LEN];  // player's path
+  startGame(rooms, NUM_ROOMS, startroom);
 
-  // generate 7 room files
 
   free(rooms);
   return 0;
