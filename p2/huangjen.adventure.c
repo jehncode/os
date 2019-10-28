@@ -16,7 +16,9 @@
 #include <time.h>
 
 #define DIRPREFIX "huangjen.rooms."
+#define TIMEFILEPATH "./currentTime.txt"
 #define BUFFER 32
+#define TIMEBUFFER 256
 #define NAME_LEN 9 // max 8 + \0
 #define NUM_ROOMS 7
 #define MAX_CONN 6
@@ -56,6 +58,7 @@ void printConnections(const struct Room* room);
 void printPath(char** path, int n);
 void exitDirAccessError();
 void printRooms(const struct Room* rooms, int n);
+void printtime();
 
 // type helpers
 char* typeStr(enum room_type type);
@@ -67,7 +70,8 @@ struct Room* getStartRoom(struct Room* rooms, int n);
 struct Room* findRoom(struct Room* rooms, int n, const char* search);
 
 // time threading
-void timethread();
+int timethread(pthread_mutex_t* mutex);
+void* createTimeFile();
 
 /* ****************************************************************************
  * Description: opens the current directory and loops through each file/
@@ -410,6 +414,7 @@ struct Room* getStartRoom(struct Room* rooms, int n) {
     return NULL;
   }
 
+  // go through rooms looking for room type to be START_ROOM
   int i = 0;
   for (; i < n; i++) {
     struct Room* room = &rooms[i];
@@ -428,21 +433,25 @@ struct Room* getStartRoom(struct Room* rooms, int n) {
  * @param name
  * ***************************************************************************/
 struct Room* findRoom(struct Room* rooms, int n, const char* search) {
+  // check if rooms exist
   if (rooms == NULL) {
     return NULL;
   }
 
+  // search through rooms for room specified by search
   int i = 0;
   for (; i < n; i++) {
     struct Room* room = &rooms[i];
+    // check if name matches search
     if (strcmp(search, room->name) == 0) {
+      // the room was found
       return room;
     }
   }
 
+  // room was not found
   return NULL;
 }
-
 
 /* ****************************************************************************
  * Description: function for running room game
@@ -451,6 +460,7 @@ struct Room* findRoom(struct Room* rooms, int n, const char* search) {
  * @param startroom
  * ***************************************************************************/
 void startGame(struct Room* rooms, int n, struct Room* startroom) {
+  pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
   // track user's current location
   struct Room* currloc = startroom;
 
@@ -484,14 +494,17 @@ void startGame(struct Room* rooms, int n, struct Room* startroom) {
     // check for time input
     while (strcmp(input, "time") == 0) {
       // thread and print time
-      timethread();
+      int thrdstat = timethread(&mutex);
+      if (thrdstat != 0) {
+        printtime();
+      }
       // print prompt for next location
-      printf("\nWHERE TO? >");
+      printf("WHERE TO? >");
       // scan input
       scanf("%s", input);
     }
-
     printf("\n");
+
 
     // validate user input
     if (findRoom(rooms, n, input) == NULL) { 
@@ -514,12 +527,79 @@ void startGame(struct Room* rooms, int n, struct Room* startroom) {
 
   // free path mem
   int f = 0; for (; f < MAX_PATH; f++) free(path[f]);
+
+  pthread_mutex_destroy(&mutex);
 }
 
-void timethread() {
+/* ****************************************************************************
+ * Description: creates thread for time logging. returns 0 if error occurs 
+ * while creating thread and 1 if thread is successfully handled
+ * ***************************************************************************/
+int timethread(pthread_mutex_t* mutex) {
+  pthread_t timethrd; // time thread
+  pthread_mutex_lock(mutex);  // lock thread
+  
+  // create thread for creating time file
+  int createthrd = pthread_create(&timethrd, NULL, createTimeFile, NULL);
+  if (createthrd != 0) {
+    perror("error: thread could not be created\n");
+    return 0;
+  }
 
+  // unlock thread before returning 
+  pthread_mutex_unlock(mutex);
+  pthread_join(timethrd, NULL);   // timethrd isn't blocked by threads
+  return 1;
 }
 
+/* ****************************************************************************
+ * Description: creates time file indicated by TIMEFILEPATH 
+ * ***************************************************************************/
+void* createTimeFile() {
+  char display[TIMEBUFFER];
+  memset(display, '\0', sizeof(display)); 
+
+  time_t curr;    // latest time
+  struct tm* tm;  // time data
+  
+  time(&curr);    // get current time
+  tm = localtime(&curr);  // get current time data
+  // save time in specified format
+  strftime(display, TIMEBUFFER, "%I:%M%P, %A, %B %d, %Y", tm);
+
+  // update time output file (create/overwrite)
+  FILE* file = fopen(TIMEFILEPATH, "w"); 
+  // check if file is accessed
+  if (file == NULL) {
+    perror("error: could not access file\n");
+    return NULL;
+  }
+  // save content to file
+  fprintf(file, "%s\n", display);
+  fclose(file);
+
+  return NULL;
+}
+
+/* ****************************************************************************
+ * Description: reads file indicated by TIMEFILEPATH and prints content to
+ * console
+ * ***************************************************************************/
+void printtime() {
+  char display[TIMEBUFFER];
+  memset(display, '\0', sizeof(display));
+  FILE* file = fopen(TIMEFILEPATH, "r");
+  if (file == NULL) {
+    perror("error: could not access file\n");
+    return;
+  }
+
+  if (fgets(display, TIMEBUFFER, file) != NULL) {
+    printf("\n%s\n", display);
+  }
+
+  fclose(file);
+}
 /* ****************************************************************************
  * Description: returns array of the randomly-selected rooms
  * @param n: number of rooms to create
@@ -538,10 +618,11 @@ int main() {
     perror("error: could not set start room. Proceeding to exit\n");
     exit(101);
   }
-
+  
+  // start game
   startGame(rooms, NUM_ROOMS, startroom);
 
-
+  // free room memory
   free(rooms);
   return 0;
 }
