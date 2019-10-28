@@ -162,7 +162,6 @@ struct Room* initRooms(const int n) {
 void getRoomFileNames(char** names, const char* loc, int n) {
   DIR* dir = opendir(loc); // pointer to directory
   if (dir == NULL) {
-    printf("attempting to access: %s\n", loc);
     exitDirAccessError();
     exit(100);
   }
