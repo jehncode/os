@@ -291,6 +291,7 @@ void setRoomInfo(struct Room* rooms, const char* loc, int n) {
 
   // free file names
   int f = 0; for (; f < n; f++) free(filenames[f]);
+  free(filenames);
 }
 
 /* ****************************************************************************
@@ -526,6 +527,7 @@ void startGame(struct Room* rooms, int n, struct Room* startroom) {
 
   // free path mem
   int f = 0; for (; f < MAX_PATH; f++) free(path[f]);
+  free(path);
 
   pthread_mutex_destroy(&mutex);
 }
