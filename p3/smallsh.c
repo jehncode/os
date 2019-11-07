@@ -27,18 +27,18 @@
 #define BUFFER 512
 
 void catchSIGINT(int signo) {
-  char* message = "SIGINT. Use CTRL-Z to Stop.\n";
-  write(STDOUT_FILENO, message, 28);
+  // char* message = "SIGINT. Use CTRL-Z to Stop.\n";
+  // write(STDOUT_FILENO, message, 28);
 }
 
 void catchSIGTSTP(int signo) {
-  char* message = "\n";
-  write(STDOUT_FILENO, message, 28);
+  // char* message = "\n";
+  // write(STDOUT_FILENO, message, 28);
 }
 
 void catchTermination() {
-  struct sigaction SIGINT_action = {0};
-  struct sigaction SIGSTOP_action = {0};
+  struct sigaction SIGINT_action = {{0}};
+  struct sigaction SIGSTOP_action = {{0}};
 
   // catch CTRL+C
   SIGINT_action.sa_handler = SIG_IGN;
@@ -60,43 +60,56 @@ int main() {
   int fin = -1;   // file input
   int fout = -1;  // file output
   int stat = 0;   // background status
-  char input[BUFFER];
-  memset(input, '\0', sizeof(input));
+  //char input[BUFFER];
+  // memset(input, '\0', sizeof(input));
 
   char* args[BUFFER];
   int isbg = 0; // boolean for is background process
 
-  int numCharsEntered = -5; // How many chars we entered
-  int currChar = -5; // Tracks where we are when we print out every char
-  size_t bufferSize = 0; // Holds how large the allocated buffer is
-  char* lineEntered = NULL; // Points to a buffer allocated by getline() that holds our entered string + \n + \0
+  int chars = -5; // How many chars we entered
+  // int currChar = -5; // Tracks where we are when we print out every char
+
+  // buffer allocated by getline() that holds our entered string + \n + \0
+  char* input = NULL; 
+  size_t buffer = 0; // Holds how large the allocated buffer is
 
   int exit = 0;
+  
+  // get commands
   while(exit < 1) {
-    // Get input from the user
+    // Get input from the user until valid not blank
     while(1) {
-      printf("Enter in a line of text (CTRL-C to exit):");
+      printf(": ");
+
       // Get a line from the user
-      numCharsEntered = getline(&lineEntered, &bufferSize, stdin);
-      if (numCharsEntered == -1)
+      chars = getline(&input, &buffer, stdin);
+      if (chars == -1)
         clearerr(stdin);
       else
-        break; // Exit the loop - we've got input
+        // Exit the loop - we've got input
+        break; 
     }
 
-    printf("Allocated %zu bytes for the %d chars you entered.\n",
-        bufferSize, numCharsEntered);
-    printf("Here is the raw entered line: \"%s\"\n", lineEntered);
+    // printf("Allocated %zu bytes for the %d chars you entered.\n", bufferSize, numCharsEntered);
+    // printf("Here is the raw entered line: \"%s\"\n", lineEntered);
+    
     // Remove the trailing \n that getline adds
-    lineEntered[strcspn(lineEntered, "\n")] = '\0';
-    printf("Here is the cleaned line: \"%s\"\n", lineEntered);
-    // Free the memory allocated by getline() or else memory leak
-    //
-    if (strcmp(lineEntered, "exit") == 0) {
+    input[strcspn(input, "\n")] = '\0';
+
+    // printf("Here is the cleaned line: \"%s\"\n", lineEntered);
+  
+    // exit command
+    if (strcmp(input, "exit") == 0) {
       exit++;
     }
-    free(lineEntered);
-    lineEntered = NULL;
+
+    // Free the memory allocated by getline() or else memory leak
+    free(input);
+    input = NULL;
   }
+
+  // kill processes
+  //
+  //
   return 0;
 }
