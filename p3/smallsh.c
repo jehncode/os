@@ -26,14 +26,15 @@
 
 #define BUFFER 512
 
+
+/* ****************************************************************************
+ * Description:
+ * catches/ignores signals sent by CTRL+C and CTRL+V
+ * ***************************************************************************/
 void catchSIGINT(int signo) {
-  // char* message = "SIGINT. Use CTRL-Z to Stop.\n";
-  // write(STDOUT_FILENO, message, 28);
 }
 
 void catchSIGTSTP(int signo) {
-  // char* message = "\n";
-  // write(STDOUT_FILENO, message, 28);
 }
 
 void catchTermination() {
@@ -53,15 +54,37 @@ void catchTermination() {
   sigaction(SIGTSTP, &SIGSTOP_action, NULL);
 }
 
+/* ****************************************************************************
+ * Description:
+ * Displays exit status to shell
+ * @param childExitInteger
+ * ***************************************************************************/
+void showStatus(int childExitInteger) {
+  // process terminated normally
+  if (WIFEXITED(childExitInteger)) {
+    // print actual exit status
+    printf("exit value %d\n", WEXITSTATUS(childExitInteger));
+    // get exit status
+  } 
+
+  // process was terminated by a signal
+  if (WIFSIGNALED(childExitInteger)) {
+    // print terminating signal
+    printf("terminated by signal %d\n", WTERMSIG(childExitInteger));
+  }
+}
+
+/* ****************************************************************************
+ * main program
+ * ***************************************************************************/
 int main() {
+  // catch signals for terminating shell
   catchTermination();
 
   int process = -1; // process
-  int fin = -1;   // file input
-  int fout = -1;  // file output
-  int stat = 0;   // background status
-  //char input[BUFFER];
-  // memset(input, '\0', sizeof(input));
+  int fin = -1;     // file input
+  int fout = -1;    // file output
+  int stat = 0;     // background status
 
   char* args[BUFFER];
   int isbg = 0; // boolean for is background process
@@ -97,7 +120,19 @@ int main() {
     input[strcspn(input, "\n")] = '\0';
 
     // printf("Here is the cleaned line: \"%s\"\n", lineEntered);
-  
+    
+    // cd command
+    if (strcmp(input, "cd") == 0) {
+      if (argct > 1) {
+        // change to directory indicated by argument 
+      } else {
+        chdir(getenv("HOME"));
+      }
+    } else
+    // status command
+    if (strcmp(input, "status") == 0) {
+      showStatus(stat);
+    } else
     // exit command
     if (strcmp(input, "exit") == 0) {
       exit++;
