@@ -15,12 +15,29 @@ void catchSIGINT(int signo) {
   write(STDOUT_FILENO, message, 28);
 }
 
-int main() {
+void catchSIGTSTP(int signo) {
+  char* message = "\n";
+  write(STDOUT_FILENO, message, 28);
+}
+
+void catchTermShortcut() {
+  // catch CTRL+C
   struct sigaction SIGINT_action = {0};
   SIGINT_action.sa_handler = catchSIGINT;
   sigfillset(&SIGINT_action.sa_mask);
   SIGINT_action.sa_flags = SA_RESTART;
   sigaction(SIGINT, &SIGINT_action, NULL);
+
+  // catch CTRL+Z
+  struct sigaction SIGSTOP_action = {0};
+  SIGSTOP_action.sa_handler = catchSIGTSTP;
+  sigfillset(&SIGSTOP_action.sa_mask);
+  SIGSTOP_action.sa_flags = SA_RESTART;
+  sigaction(SIGTSTP, &SIGSTOP_action, NULL);
+}
+
+int main() {
+  catchTermShortcut();
 
   int numCharsEntered = -5; // How many chars we entered
   int currChar = -5; // Tracks where we are when we print out every char
