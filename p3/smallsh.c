@@ -262,7 +262,7 @@ int _runshell(char** args, int n) {
   }
 
   enum _bool bkgd = _false; // track if background process
-  static int status;  // status code
+  static int status = 0;    // status code
 
   // check if background
   if (strcmp(args[n - 1], "&") == 0) {
@@ -290,7 +290,7 @@ int _runshell(char** args, int n) {
   int status_cmd = strcmp(cmd, STATUS) == 0;
   if (status_cmd) {
     printf("_runshell STATUS cmd\n"); 
-    // showStatus(status);
+    showStatus(status);
   } 
 
   // return if supported commands entered
@@ -337,33 +337,20 @@ int main() {
     // parse command
     int nArgs;
     char** args = parseInput(&nArgs, input);
-
-    // printf("from main, nArgs: %d\n", nArgs);
     // int i = 0; for (; i < nArgs; i++) { printf("%d: %s\n", i, args[i]); }
 
-    // run shell
+    // execute shell
     int exitCode = -1;
     exitCode = _runshell(args, nArgs);
 
     // Free the memory allocated by getline() or else memory leak
     free(input);
     input = NULL;
-
-    //debug
-    /*
-    if (strcmp(args[0], EXIT) == 0) {
-      freeargs(args, nArgs);
-      exit(0);
-    }
-    */
-
     freeargs(args, nArgs);
 
     // exit if smallsh induced an exit
-    printf("main exitCode: %d\n", exitCode);
-    if (exitCode > -1) {
-      exit(exitCode);
-    }
+    // printf("main exitCode: %d\n", exitCode);
+    if (exitCode > -1) { exit(exitCode); }
   }
 
   // kill processes
