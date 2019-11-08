@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <sys/wait.h>
 
 #define BUFFER 256
 #define ARGBUFF 1028 
@@ -49,13 +50,15 @@ enum _bool {
 // signal control
 void catchSIGINT(int signo);
 void catchSIGTSTP(int signo);
+struct sigaction catch_sigIGN();
+struct sigaction catch_sigSTGTSTP();
 void catchSignal();
 
 // smallsh prog
 int _runshell(char** args, int n);
 char* getcmd();
 char** parseInput(int* n, char* input);
-int _fork(enum _bool bkgd, int* status);
+int _fork(char** args, int n, enum _bool bkgd, int* status);
 
 // status cmd
 void showStatus(int childExitInteger);
@@ -73,20 +76,28 @@ void freeargs(char** args, int n);
  * catches/ignores signals sent by CTRL+C and CTRL+V
  * ***************************************************************************/
 void catchSignal() {
-  struct sigaction SIGINT_action = {{0}};
-  struct sigaction SIGSTOP_action = {{0}};
+  catch_sigIGN();
+  catch_sigSTGTSTP();
+}
 
-  // catch CTRL+C
-  SIGINT_action.sa_handler = SIG_IGN;
-  sigfillset(&SIGINT_action.sa_mask);
-  SIGINT_action.sa_flags = SA_RESTART;
-  sigaction(SIGINT, &SIGINT_action, NULL);
-
-  // catch CTRL+Z
+// catcher for CTRL+Z
+struct sigaction catch_sigSTGTSTP() {
+  static struct sigaction SIGSTOP_action = {{0}};
   SIGSTOP_action.sa_handler = catchSIGTSTP;
   sigfillset(&SIGSTOP_action.sa_mask);
   SIGSTOP_action.sa_flags = SA_RESTART;
   sigaction(SIGTSTP, &SIGSTOP_action, NULL);
+  return SIGSTOP_action;
+}
+
+// catcher for CTRL+C
+struct sigaction catch_sigIGN() {
+  static struct sigaction SIGINT_action = {{0}};
+  SIGINT_action.sa_handler = SIG_IGN;
+  sigfillset(&SIGINT_action.sa_mask);
+  SIGINT_action.sa_flags = SA_RESTART;
+  sigaction(SIGINT, &SIGINT_action, NULL);
+  return SIGINT_action;
 }
 
 // catch CTRL+C
@@ -199,49 +210,90 @@ char** parseInput(int* nArgs, char* input) {
   return args;
 }
 
+char* fileDirection(char** args, int n, char* dir) {
+  int i = 0;
+  for (; i < n; i++) {
+    if ((strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0) && 
+      (i + 1) < n) {
+      dir = args[i];
+      return args[i+1];
+    }
+  }
+
+  return NULL;
+}
+
+void handlefiledir(char* filename, char* dir, enum _bool bkgd) {
+  /*
+  int file = -1;
+  if (bkgd == _true) {
+    file = open("/dev/null", O_RDONLY);
+  }
+  */
+}
+
 /* ****************************************************************************
  * Description:
  * creates fork for all other commands, returns 1 if error occurs and -1
  * if exit not reached
+ * @param args
+ * @param n
  * @param bkgd
  * @param status
  * ***************************************************************************/
-int _fork(enum _bool bkgd, int* status) {
-  /*
+int _fork(char** args, int n, enum _bool bkgd, int* status) {
+  // signal catcher
+  struct sigaction _action = catch_sigIGN();
+
+  int stat = *status;
+
   // create a fork
   pid_t pid = fork();
 
-  // check if child is created, exit 1 if error
-  if (pid < 0) {
-  perror("error: unable to create child\n"); 
-  return 1;
+  switch(pid) {
+    case -1:    // check if error creating child
+      perror("error: unable to create child\n");
+      return 1; // exit 1 if error
+
+    case 0:     // curr is child process
+      // stop as foreground process
+      if (bkgd == _false) {
+        _action.sa_handler = SIG_DFL;
+        sigaction(SIGINT, &_action, NULL);
+        // printf("terminated: %d\n", pid);
+      }
+      
+      // get filename if process redirects directory
+      char* dir = NULL;   // ">" or "<"
+      char* filename = fileDirection(args, n, dir);
+      if (filename != NULL) {
+        break; 
+      }
+      // handle redirection
+      printf("dir: %s %s\n", dir, filename);
+      handlefiledir(filename, dir, bkgd);
+
+    default:    // curr is parent process
+      if (bkgd == _true) {   // on background
+        // print background pid
+        printf("background pid is %d\n", (int) pid);
+      } else {               // on foreground
+        // wait for process to finish
+        printf("wait for pid %d to finish\n", (int) pid);
+        waitpid(pid, &stat, 0);
+        // check if signal terminated process
+        signalstatus(stat);
+        
+        // background processes
+        do {
+          printf("background process %d is done\n", (int) pid);
+          showStatus(stat);
+          pid = waitpid(-1, &stat, WNOHANG);
+        } while (pid > 0);
+      }
+      break;
   }
 
-  // curr is child process
-  if (pid == 0) {
-  // terminate if on foreground
-  if (!bkgd) {
-  SIGINT_action.sa_handler = SIG_DFL;
-  sigaction(SIGINT, &SIGINT_action, NULL);
-  }
-
-  execvp(args[0], n);
-  perror("error: command not found\n");
-  return 1;
-  }
-
-  // curr is parent process
-  if (bkgd) {
-  // print background pid
-  printf("background pid is %d\n", pid);
-  } else {
-  waitpid(pid, &status, 0);
-  // check if signal terminated process
-  signalstatus(status);
-
-  // check for background processes
-  }
-  */
   return -1;
 }
 
@@ -266,7 +318,6 @@ int _runshell(char** args, int n) {
 
   // check if background
   if (strcmp(args[n - 1], "&") == 0) {
-    printf("_runshell %s\n", args[n-1]);
     bkgd = _true;
     n--;
   }
@@ -276,7 +327,6 @@ int _runshell(char** args, int n) {
 
   // exit command
   if (strcmp(cmd, EXIT) == 0) {
-    printf("_runshell EXIT cmd\n"); 
     return 0;
   }
 
@@ -289,7 +339,6 @@ int _runshell(char** args, int n) {
   // status command
   int status_cmd = strcmp(cmd, STATUS) == 0;
   if (status_cmd) {
-    printf("_runshell STATUS cmd\n"); 
     showStatus(status);
   } 
 
@@ -298,11 +347,11 @@ int _runshell(char** args, int n) {
     return ret; 
   }
 
-  //debug
-  return ret;
-
   // all other commands induces fork()
-  // return _fork(bkgd, status);
+  int res = _fork(args, n, bkgd, &status);
+  // if (res == -1) return 1;
+
+  return res;
 }
 
 /* ****************************************************************************
@@ -337,7 +386,6 @@ int main() {
     // parse command
     int nArgs;
     char** args = parseInput(&nArgs, input);
-    // int i = 0; for (; i < nArgs; i++) { printf("%d: %s\n", i, args[i]); }
 
     // execute shell
     int exitCode = -1;
@@ -349,7 +397,6 @@ int main() {
     freeargs(args, nArgs);
 
     // exit if smallsh induced an exit
-    // printf("main exitCode: %d\n", exitCode);
     if (exitCode > -1) { exit(exitCode); }
   }
 
