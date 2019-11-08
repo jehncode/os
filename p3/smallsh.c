@@ -52,8 +52,9 @@ void catchSIGTSTP(int signo);
 void catchSignal();
 
 // smallsh prog
-int parseInput(char** args, char* input);
-int _runcmd(char** args, int n);
+int _runshell(char** args, int n);
+char* getcmd();
+char** parseInput(int* n, char* input);
 int _fork(enum _bool bkgd, int* status);
 
 // status cmd
@@ -143,12 +144,39 @@ void _chdir(char** args, int n) {
 }
 
 /* ****************************************************************************
- * Description:
- * Parses string considering ' ' and returns number of segments of input
- * @param args
+ * Description: [reference: lecture notes]
+ * repeatedly gets input from user until valid and stores it
  * @param input
  * ***************************************************************************/
-int parseInput(char** args, char* input) {
+char* getcmd() {
+  char* input = NULL;
+  size_t buffer = 0; // Holds how large the allocated buffer is
+  while(1) {
+    printf(": ");
+
+    // Get a line from the user
+    int chars = getline(&input, &buffer, stdin); // result of reading line
+
+    // check if line was read and if leading w/ # (comment)
+    if (chars == -1 || input[0] == '#')
+      clearerr(stdin);
+    else
+      // Exit the loop - we've got input
+      break; 
+  }
+  // Remove the trailing \n that getline adds
+  input[strcspn(input, "\n")] = '\0';
+
+  return input;
+}
+
+/* ****************************************************************************
+ * Description:
+ * Parses string considering ' ' and returns segments input
+ * and stores number of segments
+ * @param input
+ * ***************************************************************************/
+char** parseInput(int* numArgs, char* input) {
   printf("input: %s\n", input); // debug
 
   // get number of segments
@@ -160,19 +188,21 @@ int parseInput(char** args, char* input) {
   }
 
   int n = 0;    // idx for segments in input;
-  args = malloc(sizeof(char*) * n);
+  char** args = malloc(sizeof(char*) * nArgs);
   char* token = strtok(input, " \n");
   while(token != NULL) {
     // duplicate argument to args list
     args[n++] = strdup(token);    
 
-    printf("%d: %s\n", n-1, args[n-1]); // debug
-
     // update token
     token = strtok(NULL, " \n");
   }
 
-  return n;
+  printf("parseInput tokens:\n");
+    int i = 0; for (; i < n; i++) { printf("%d: %s\n", i, args[i]); }
+  
+  *numArgs = n;
+  return args;
 }
 
 /* ****************************************************************************
@@ -189,33 +219,33 @@ int _fork(enum _bool bkgd, int* status) {
 
   // check if child is created, exit 1 if error
   if (pid < 0) {
-    perror("error: unable to create child\n"); 
-    return 1;
+  perror("error: unable to create child\n"); 
+  return 1;
   }
 
   // curr is child process
   if (pid == 0) {
-    // terminate if on foreground
-    if (!bkgd) {
-      SIGINT_action.sa_handler = SIG_DFL;
-      sigaction(SIGINT, &SIGINT_action, NULL);
-    }
+  // terminate if on foreground
+  if (!bkgd) {
+  SIGINT_action.sa_handler = SIG_DFL;
+  sigaction(SIGINT, &SIGINT_action, NULL);
+  }
 
-    execvp(args[0], n);
-    perror("error: command not found\n");
-    return 1;
+  execvp(args[0], n);
+  perror("error: command not found\n");
+  return 1;
   }
 
   // curr is parent process
   if (bkgd) {
-    // print background pid
-    printf("background pid is %d\n", pid);
+  // print background pid
+  printf("background pid is %d\n", pid);
   } else {
-    waitpid(pid, &status, 0);
-    // check if signal terminated process
-    signalstatus(status);
+  waitpid(pid, &status, 0);
+  // check if signal terminated process
+  signalstatus(status);
 
-    // check for background processes
+  // check for background processes
   }
   */
   return -1;
@@ -230,7 +260,7 @@ int _fork(enum _bool bkgd, int* status) {
  * @param args
  * @param n
  * ***************************************************************************/
-int _runcmd(char** args, int n) {
+int _runshell(char** args, int n) {
   int ret = -1;
   // check for invalid arguments
   if (args == NULL || n < 1) {
@@ -295,39 +325,28 @@ void freeargs(char** args, int n) {
  * ***************************************************************************/
 int main() {
   // catch signals 
-  catchSignal();
+  catchSignal();    // handle signals
 
   int chars = -5;   // How many chars we entered
 
   // buffer allocated by getline() that holds our entered string + \n + \0
   char* input = NULL; 
-  size_t buffer = 0; // Holds how large the allocated buffer is
 
   // get command & run shell
   while(1) {   // from lecture notes
-    // Get input from the user until valid not blank
-    while(1) {
-      printf(": ");
-
-      // Get a line from the user
-      chars = getline(&input, &buffer, stdin);
-      if (chars == -1 || input[0] == '#')
-        clearerr(stdin);
-      else
-        // Exit the loop - we've got input
-        break; 
-    }
+    // Get input from the user
+    input = getcmd();
 
     // parse command
-    char** args = NULL;
-    int nArgs = parseInput(args, input);
+    int nArgs;
+    char** args = parseInput(&nArgs, input);
     printf("from main, nArgs: %d\n", nArgs);
 
     int i = 0; for (; i < nArgs; i++) { printf("%d: %s\n", i, args[i]); }
 
     // run shell
     int exitCode = -1;
-    // int exitCode = _runcmd(args, nArgs);
+    // int exitCode = _runshell(args, nArgs);
 
     // Free the memory allocated by getline() or else memory leak
     free(input);
