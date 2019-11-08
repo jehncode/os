@@ -25,7 +25,7 @@
 #include <ctype.h>
 
 #define BUFFER 256
-#define ARGBUFF 16 
+#define ARGBUFF 1028 
 
 /* ****************************************************************************
  * struct/enum definitions
@@ -95,7 +95,7 @@ void catchSIGINT(int signo) {
 
 // catch CTRL+Z (foreground only)
 void catchSIGTSTP(int signo) {
-  printf("Exiting foreground-only mode\n");
+  printf("\nExiting foreground-only mode\n");
 }
 
 
@@ -151,16 +151,17 @@ void _chdir(char** args, int n) {
 char* getcmd() {
   char* input = NULL;
   size_t buffer = 0; // Holds how large the allocated buffer is
+  int chars = -5;   // number of chars entered
   while(1) {
     printf(": ");
 
     // Get a line from the user
-    int chars = getline(&input, &buffer, stdin); // result of reading line
+    chars = getline(&input, &buffer, stdin); // result of reading line
 
     // check if line was read and if leading w/ # (comment)
-    if (chars == -1 || input[0] == '#')
+    if (chars == -1 || input[0] == '\n' || input[0] == '#') {
       clearerr(stdin);
-    else
+    } else
       // Exit the loop - we've got input
       break; 
   }
@@ -176,19 +177,10 @@ char* getcmd() {
  * and stores number of segments
  * @param input
  * ***************************************************************************/
-char** parseInput(int* numArgs, char* input) {
-  printf("input: %s\n", input); // debug
-
-  // get number of segments
-  int nArgs = 0;    // number of segments
-  int c = 0;
-  for (; c < sizeof(input); c++) {
-    if (input[c] == '\0') break;
-    if (input[c] == ' ') nArgs++;
-  }
-
+char** parseInput(int* nArgs, char* input) {
+  // get segments
   int n = 0;    // idx for segments in input;
-  char** args = malloc(sizeof(char*) * nArgs);
+  char** args = malloc(sizeof(char) * ARGBUFF);
   char* token = strtok(input, " \n");
   while(token != NULL) {
     // duplicate argument to args list
@@ -198,10 +190,7 @@ char** parseInput(int* numArgs, char* input) {
     token = strtok(NULL, " \n");
   }
 
-  printf("parseInput tokens:\n");
-    int i = 0; for (; i < n; i++) { printf("%d: %s\n", i, args[i]); }
-  
-  *numArgs = n;
+  *nArgs = n;
   return args;
 }
 
@@ -272,6 +261,7 @@ int _runshell(char** args, int n) {
 
   // check if background
   if (strcmp(args[n - 1], "&") == 0) {
+    printf("_runshell %s\n", args[n-1]);
     bkgd = _true;
     n--;
   }
@@ -281,23 +271,29 @@ int _runshell(char** args, int n) {
 
   // exit command
   if (strcmp(cmd, EXIT) == 0) {
+    printf("_runshell EXIT cmd: return 0\n"); 
     return 0;
   }
 
   // cd command
   int cd_cmd = strcmp(cmd, CD) == 0;
   if (cd_cmd) {
-    _chdir(args, n);
+    printf("_runshell CD cmd: "); 
+    // _chdir(args, n);
   } 
 
   // status command
   int status_cmd = strcmp(cmd, STATUS) == 0;
   if (status_cmd) {
-    showStatus(status);
+    printf("_runshell STATUS cmd: "); 
+    // showStatus(status);
   } 
 
   // return if supported commands entered
-  if (cd_cmd || status_cmd) { return ret; }
+  if (cd_cmd || status_cmd) { 
+    printf("return %d\n", ret);
+    return ret; 
+  }
 
   //debug
   return ret;
@@ -313,7 +309,7 @@ int _runshell(char** args, int n) {
  * ***************************************************************************/
 void freeargs(char** args, int n) {
   int i = 0;
-  for (; i < ARGBUFF; i++) {
+  for (; i < n; i++) {
     free(args[i]);
     args[i] = NULL;
   }
@@ -324,10 +320,7 @@ void freeargs(char** args, int n) {
  * main program
  * ***************************************************************************/
 int main() {
-  // catch signals 
   catchSignal();    // handle signals
-
-  int chars = -5;   // How many chars we entered
 
   // buffer allocated by getline() that holds our entered string + \n + \0
   char* input = NULL; 
@@ -340,20 +333,30 @@ int main() {
     // parse command
     int nArgs;
     char** args = parseInput(&nArgs, input);
-    printf("from main, nArgs: %d\n", nArgs);
 
-    int i = 0; for (; i < nArgs; i++) { printf("%d: %s\n", i, args[i]); }
+    // printf("from main, nArgs: %d\n", nArgs);
+    // int i = 0; for (; i < nArgs; i++) { printf("%d: %s\n", i, args[i]); }
 
     // run shell
     int exitCode = -1;
-    // int exitCode = _runshell(args, nArgs);
+    exitCode = _runshell(args, nArgs);
 
     // Free the memory allocated by getline() or else memory leak
     free(input);
     input = NULL;
+
+    //debug
+    /*
+    if (strcmp(args[0], EXIT) == 0) {
+      freeargs(args, nArgs);
+      exit(0);
+    }
+    */
+
     freeargs(args, nArgs);
 
     // exit if smallsh induced an exit
+    printf("main exitCode: %d\n", exitCode);
     if (exitCode > -1) {
       exit(exitCode);
     }
