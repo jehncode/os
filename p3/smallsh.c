@@ -17,15 +17,23 @@
  * status: prints out the exit status or terminating signal of the last 
  * foreground process
  * ***************************************************************************/
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #define BUFFER 256
-#define ARGSBUFFER 2048
+#define ARGBUFF 16 
+
+/* ****************************************************************************
+ * struct/enum definitions
+ * ***************************************************************************/
+enum _bool {
+  _true,
+  _false
+};
 
 /* ****************************************************************************
  * definitions for strings/supported commands
@@ -43,7 +51,10 @@ void catchSIGINT(int signo);
 void catchSIGTSTP(int signo);
 void catchSignal();
 
-int getNumOfArgs(char* s);
+// smallsh prog
+int parseInput(char** args, char* input);
+int _runcmd(char** args, int n);
+int _fork(enum _bool bkgd, int* status);
 
 // status cmd
 void showStatus(int childExitInteger);
@@ -54,25 +65,12 @@ void signalstatus(int childExitInteger);
 void _chfile(char** args, int n);
 
 // memory control
-void freeargs(char** args, int n) {
-
-/* ****************************************************************************
- * struct/enum definitions
- * ***************************************************************************/
+void freeargs(char** args, int n);
 
 /* ****************************************************************************
  * Description:
  * catches/ignores signals sent by CTRL+C and CTRL+V
  * ***************************************************************************/
-// catch CTRL+C
-void catchSIGINT(int signo) {
-}
-
-// catch CTRL+Z (foreground only)
-void catchSIGTSTP(int signo) {
-  printf("Exiting foreground-only mode\n");
-}
-
 void catchSignal() {
   struct sigaction SIGINT_action = {{0}};
   struct sigaction SIGSTOP_action = {{0}};
@@ -90,6 +88,16 @@ void catchSignal() {
   sigaction(SIGTSTP, &SIGSTOP_action, NULL);
 }
 
+// catch CTRL+C
+void catchSIGINT(int signo) {
+}
+
+// catch CTRL+Z (foreground only)
+void catchSIGTSTP(int signo) {
+  printf("Exiting foreground-only mode\n");
+}
+
+
 /* ****************************************************************************
  * Description:
  * Displays exit/signaled status to shell
@@ -98,8 +106,7 @@ void catchSignal() {
 void showStatus(int childExitInteger) {
   // process terminated normally
   exitstatus(childExitInteger);
-
-  // process was terminated by a signal
+  // process terminated by a signal
   signalstatus(childExitInteger);
 }
 
@@ -126,13 +133,13 @@ void signalstatus(int childExitInteger) {
  * @param input
  * ***************************************************************************/
 void _chdir(char** args, int n) {
-    if (n > 2) {
-      // change to directory indicated by argument 
-      chdir(args[1]);
-    } else {
-      // change to home directory
-      chdir(getenv(HOME));
-    }
+  if (n > 2) {
+    // change to directory indicated by argument 
+    chdir(args[1]);
+  } else {
+    // change to home directory
+    chdir(getenv(HOME));
+  }
 }
 
 /* ****************************************************************************
@@ -142,14 +149,29 @@ void _chdir(char** args, int n) {
  * @param input
  * ***************************************************************************/
 int parseInput(char** args, char* input) {
-  int n = 0;    // number of segments in input;
+  printf("input: %s\n", input); // debug
+
+  // get number of segments
+  int nArgs = 0;    // number of segments
+  int c = 0;
+  for (; c < sizeof(input); c++) {
+    if (input[c] == '\0') break;
+    if (input[c] == ' ') nArgs++;
+  }
+
+  int n = 0;    // idx for segments in input;
+  args = malloc(sizeof(char*) * n);
   char* token = strtok(input, " \n");
   while(token != NULL) {
     // duplicate argument to args list
     args[n++] = strdup(token);    
+
+    printf("%d: %s\n", n-1, args[n-1]); // debug
+
     // update token
     token = strtok(NULL, " \n");
   }
+
   return n;
 }
 
@@ -160,7 +182,8 @@ int parseInput(char** args, char* input) {
  * @param bkgd
  * @param status
  * ***************************************************************************/
-int _fork(bool& bkgd, int& status) {
+int _fork(enum _bool bkgd, int* status) {
+  /*
   // create a fork
   pid_t pid = fork();
 
@@ -173,7 +196,7 @@ int _fork(bool& bkgd, int& status) {
   // curr is child process
   if (pid == 0) {
     // terminate if on foreground
-    if (!bkgrd) {
+    if (!bkgd) {
       SIGINT_action.sa_handler = SIG_DFL;
       sigaction(SIGINT, &SIGINT_action, NULL);
     }
@@ -184,16 +207,17 @@ int _fork(bool& bkgd, int& status) {
   }
 
   // curr is parent process
-  if (bkgrd) {
+  if (bkgd) {
     // print background pid
     printf("background pid is %d\n", pid);
   } else {
-     waitpid(pid, &status, 0);
-     // check if signal terminated process
-     signalstatus(status);
+    waitpid(pid, &status, 0);
+    // check if signal terminated process
+    signalstatus(status);
 
-     // check for background processes
+    // check for background processes
   }
+  */
   return -1;
 }
 
@@ -206,48 +230,51 @@ int _fork(bool& bkgd, int& status) {
  * @param args
  * @param n
  * ***************************************************************************/
-int smallsh(char** args, int n) {
+int _runcmd(char** args, int n) {
   int ret = -1;
   // check for invalid arguments
   if (args == NULL || n < 1) {
     return ret;
   }
-  
-  // variables
-  bool bkgd = false;  // boolean for is background process
-  static int status;          // status code
 
-// execute commands
+  enum _bool bkgd = _false; // track if background process
+  static int status;  // status code
+
   // check if background
   if (strcmp(args[n - 1], "&") == 0) {
-    bkgrd = TRUE;
+    bkgd = _true;
     n--;
   }
 
+  // execute supported commands
+  char* cmd = args[0];
+
   // exit command
-  if (strcmp(input, EXIT) == 0) {
+  if (strcmp(cmd, EXIT) == 0) {
     return 0;
   }
 
   // cd command
-  int cd_cmd = strcmp(args[0], CD) == 0;
+  int cd_cmd = strcmp(cmd, CD) == 0;
   if (cd_cmd) {
     _chdir(args, n);
   } 
 
   // status command
-  int status_cmd = strcmp(args[0], STATUS) == 0;
+  int status_cmd = strcmp(cmd, STATUS) == 0;
   if (status_cmd) {
     showStatus(status);
   } 
-  
+
   // return if supported commands entered
   if (cd_cmd || status_cmd) { return ret; }
 
-  // all other commands induces fork()
-  return _fork(bkgd, status);
-}
+  //debug
+  return ret;
 
+  // all other commands induces fork()
+  // return _fork(bkgd, status);
+}
 
 /* ****************************************************************************
  * Description: frees args 
@@ -256,10 +283,11 @@ int smallsh(char** args, int n) {
  * ***************************************************************************/
 void freeargs(char** args, int n) {
   int i = 0;
-  for (; i < n; i++) {
+  for (; i < ARGBUFF; i++) {
     free(args[i]);
     args[i] = NULL;
   }
+  free(args);
 }
 
 /* ****************************************************************************
@@ -269,18 +297,11 @@ int main() {
   // catch signals 
   catchSignal();
 
-  int process = -1; // process
-  int fin = -1;     // file input
-  int fout = -1;    // file output
-  int stat = 0;     // background status
-
   int chars = -5;   // How many chars we entered
 
   // buffer allocated by getline() that holds our entered string + \n + \0
   char* input = NULL; 
   size_t buffer = 0; // Holds how large the allocated buffer is
-
-  int exit = 0;
 
   // get command & run shell
   while(1) {   // from lecture notes
@@ -297,15 +318,16 @@ int main() {
         break; 
     }
 
-    // Remove the trailing \n that getline adds
-    input[strcspn(input, "\n")] = '\0';
-
     // parse command
     char** args = NULL;
     int nArgs = parseInput(args, input);
+    printf("from main, nArgs: %d\n", nArgs);
+
+    int i = 0; for (; i < nArgs; i++) { printf("%d: %s\n", i, args[i]); }
 
     // run shell
-    int exitCode = smallsh(args, nArgs);
+    int exitCode = -1;
+    // int exitCode = _runcmd(args, nArgs);
 
     // Free the memory allocated by getline() or else memory leak
     free(input);
