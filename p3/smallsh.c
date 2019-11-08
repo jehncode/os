@@ -27,33 +27,53 @@
 #define BUFFER 256
 #define ARGSBUFFER 2048
 
-// definitions for strings/supported commands
+/* ****************************************************************************
+ * definitions for strings/supported commands
+ * ***************************************************************************/
 #define HOME "HOME"
 #define EXIT "exit"
 #define CD "cd"
 #define STATUS "status"
 
-// function declarations
-void showStatus(int childExitInteger);
+/* ****************************************************************************
+ * function declarations
+ * ***************************************************************************/
+// signal control
+void catchSIGINT(int signo);
+void catchSIGTSTP(int signo);
+void catchSignal();
+
 int getNumOfArgs(char* s);
 
-// struct/enums
-enum BOOL { 
-  TRUE,
-  FALSE
-};
+// status cmd
+void showStatus(int childExitInteger);
+void exitstatus(int childExitInteger);
+void signalstatus(int childExitInteger);
+
+// file directory
+void _chfile(char** args, int n);
+
+// memory control
+void freeargs(char** args, int n) {
+
+/* ****************************************************************************
+ * struct/enum definitions
+ * ***************************************************************************/
 
 /* ****************************************************************************
  * Description:
  * catches/ignores signals sent by CTRL+C and CTRL+V
  * ***************************************************************************/
+// catch CTRL+C
 void catchSIGINT(int signo) {
 }
 
+// catch CTRL+Z (foreground only)
 void catchSIGTSTP(int signo) {
+  printf("Exiting foreground-only mode\n");
 }
 
-void catchTermination() {
+void catchSignal() {
   struct sigaction SIGINT_action = {{0}};
   struct sigaction SIGSTOP_action = {{0}};
 
@@ -72,22 +92,47 @@ void catchTermination() {
 
 /* ****************************************************************************
  * Description:
- * Displays exit status to shell
+ * Displays exit/signaled status to shell
  * @param childExitInteger
  * ***************************************************************************/
 void showStatus(int childExitInteger) {
   // process terminated normally
+  exitstatus(childExitInteger);
+
+  // process was terminated by a signal
+  signalstatus(childExitInteger);
+}
+
+// prints status if exited normally
+void exitstatus(int childExitInteger) {
   if (WIFEXITED(childExitInteger)) {
     // print actual exit status
     printf("exit value %d\n", WEXITSTATUS(childExitInteger));
     // get exit status
   } 
-
-  // process was terminated by a signal
+}
+//prints status if termination by signal
+void signalstatus(int childExitInteger) {
   if (WIFSIGNALED(childExitInteger)) {
     // print terminating signal
     printf("terminated by signal %d\n", WTERMSIG(childExitInteger));
   }
+}
+
+/* ****************************************************************************
+ * Description:
+ * change directory
+ * @param args
+ * @param input
+ * ***************************************************************************/
+void _chdir(char** args, int n) {
+    if (n > 2) {
+      // change to directory indicated by argument 
+      chdir(args[1]);
+    } else {
+      // change to home directory
+      chdir(getenv(HOME));
+    }
 }
 
 /* ****************************************************************************
@@ -110,56 +155,105 @@ int parseInput(char** args, char* input) {
 
 /* ****************************************************************************
  * Description:
- * runs shell program and executes user's commands, returns 0 if terminated
- * using exit command
+ * creates fork for all other commands, returns 1 if error occurs and -1
+ * if exit not reached
+ * @param bkgd
+ * @param status
+ * ***************************************************************************/
+int _fork(bool& bkgd, int& status) {
+  // create a fork
+  pid_t pid = fork();
+
+  // check if child is created, exit 1 if error
+  if (pid < 0) {
+    perror("error: unable to create child\n"); 
+    return 1;
+  }
+
+  // curr is child process
+  if (pid == 0) {
+    // terminate if on foreground
+    if (!bkgrd) {
+      SIGINT_action.sa_handler = SIG_DFL;
+      sigaction(SIGINT, &SIGINT_action, NULL);
+    }
+
+    execvp(args[0], n);
+    perror("error: command not found\n");
+    return 1;
+  }
+
+  // curr is parent process
+  if (bkgrd) {
+    // print background pid
+    printf("background pid is %d\n", pid);
+  } else {
+     waitpid(pid, &status, 0);
+     // check if signal terminated process
+     signalstatus(status);
+
+     // check for background processes
+  }
+  return -1;
+}
+
+/* ****************************************************************************
+ * Description:
+ * runs shell program and executes user's commands, returns exit code:
+ * -1 if exit not reached
+ * 0 if terminated using exit command
+ * 1 if error occurs
  * @param args
  * @param n
  * ***************************************************************************/
 int smallsh(char** args, int n) {
   int ret = -1;
-  // check if there are any arguments
+  // check for invalid arguments
   if (args == NULL || n < 1) {
     return ret;
   }
   
   // variables
-  enum BOOL isbkgrd = FALSE;  // boolean for is background process
+  bool bkgd = false;  // boolean for is background process
   static int status;          // status code
 
 // execute commands
   // check if background
   if (strcmp(args[n - 1], "&") == 0) {
-    isbkgrd++;
+    bkgrd = TRUE;
     n--;
   }
 
   // exit command
   if (strcmp(input, EXIT) == 0) {
-    return ++ret;
+    return 0;
   }
 
   // cd command
-  if (strcmp(args[0], CD) == 0) {
-    if (n > 2) {
-      // change to directory indicated by argument 
-      chdir(args[1]);
-    } else {
-      // change to home directory
-      chdir(getenv(HOME));
-    }
-    return ret;
+  int cd_cmd = strcmp(args[0], CD) == 0;
+  if (cd_cmd) {
+    _chdir(args, n);
   } 
 
   // status command
-  if (strcmp(input, STATUS) == 0) {
+  int status_cmd = strcmp(args[0], STATUS) == 0;
+  if (status_cmd) {
     showStatus(status);
-    return ret;
   } 
+  
+  // return if supported commands entered
+  if (cd_cmd || status_cmd) { return ret; }
 
-  // all other commands--fork()
-
+  // all other commands induces fork()
+  return _fork(bkgd, status);
 }
 
+
+/* ****************************************************************************
+ * Description: frees args 
+ * @param args
+ * @param n
+ * ***************************************************************************/
 void freeargs(char** args, int n) {
   int i = 0;
   for (; i < n; i++) {
@@ -173,7 +267,7 @@ void freeargs(char** args, int n) {
  * ***************************************************************************/
 int main() {
   // catch signals 
-  catchTermination();
+  catchSignal();
 
   int process = -1; // process
   int fin = -1;     // file input
@@ -211,15 +305,16 @@ int main() {
     int nArgs = parseInput(args, input);
 
     // run shell
-    int exit = smallsh(args, nArgs);
+    int exitCode = smallsh(args, nArgs);
 
     // Free the memory allocated by getline() or else memory leak
     free(input);
     input = NULL;
     freeargs(args, nArgs);
 
-    if (exit == 0) {
-      exit(0);
+    // exit if smallsh induced an exit
+    if (exitCode > -1) {
+      exit(exitCode);
     }
   }
 
