@@ -134,12 +134,17 @@ void signalstatus(int childExitInteger) {
  * @param input
  * ***************************************************************************/
 void _chdir(char** args, int n) {
-  if (n > 2) {
+  int ch;
+  if (n > 1) {
     // change to directory indicated by argument 
-    chdir(args[1]);
+    ch = chdir(args[1]);
   } else {
     // change to home directory
-    chdir(getenv(HOME));
+    ch = chdir(getenv(HOME));
+  }
+
+  if (ch == -1) {
+    perror("");
   }
 }
 
@@ -159,7 +164,7 @@ char* getcmd() {
     chars = getline(&input, &buffer, stdin); // result of reading line
 
     // check if line was read and if leading w/ # (comment)
-    if (chars == -1 || input[0] == '\n' || input[0] == '#') {
+    if (chars == -1 || input[0] == '#') {
       clearerr(stdin);
     } else
       // Exit the loop - we've got input
@@ -271,27 +276,25 @@ int _runshell(char** args, int n) {
 
   // exit command
   if (strcmp(cmd, EXIT) == 0) {
-    printf("_runshell EXIT cmd: return 0\n"); 
+    printf("_runshell EXIT cmd\n"); 
     return 0;
   }
 
   // cd command
   int cd_cmd = strcmp(cmd, CD) == 0;
   if (cd_cmd) {
-    printf("_runshell CD cmd: "); 
-    // _chdir(args, n);
+    _chdir(args, n);
   } 
 
   // status command
   int status_cmd = strcmp(cmd, STATUS) == 0;
   if (status_cmd) {
-    printf("_runshell STATUS cmd: "); 
+    printf("_runshell STATUS cmd\n"); 
     // showStatus(status);
   } 
 
   // return if supported commands entered
   if (cd_cmd || status_cmd) { 
-    printf("return %d\n", ret);
     return ret; 
   }
 
@@ -329,6 +332,7 @@ int main() {
   while(1) {   // from lecture notes
     // Get input from the user
     input = getcmd();
+    if (input[0] == '\0') continue;
 
     // parse command
     int nArgs;
