@@ -24,9 +24,10 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #define BUFFER 256
-#define ARGBUFF 1028 
+#define ARGBUFF 32 
 
 /* ****************************************************************************
  * struct/enum definitions
@@ -70,6 +71,9 @@ void _chfile(char** args, int n);
 
 // memory control
 void freeargs(char** args, int n);
+
+// debug
+void printargs(char** args);
 
 /* ****************************************************************************
  * Description:
@@ -153,9 +157,9 @@ void _chdir(char** args, int n) {
     // change to home directory
     ch = chdir(getenv(HOME));
   }
-
+  // error changing directory
   if (ch == -1) {
-    perror("");
+    perror("error: unable to access directory");
   }
 }
 
@@ -196,17 +200,20 @@ char* getcmd() {
 char** parseInput(int* nArgs, char* input) {
   // get segments
   int n = 0;    // idx for segments in input;
-  char** args = malloc(sizeof(char) * ARGBUFF);
+  char** args = malloc(sizeof(char*) * ARGBUFF);
   char* token = strtok(input, " \n");
   while(token != NULL) {
     // duplicate argument to args list
-    args[n++] = strdup(token);    
+    char* curr = malloc(sizeof(char) * BUFFER);
+    sprintf(curr, "%s", token);
+    args[n++] = curr;
 
     // update token
     token = strtok(NULL, " \n");
   }
 
   *nArgs = n;
+  // printargs(args);
   return args;
 }
 
@@ -223,14 +230,49 @@ char* fileDirection(char** args, int n, char* dir) {
   return NULL;
 }
 
-void handlefiledir(char* filename, char* dir, enum _bool bkgd) {
+/* ****************************************************************************
+ * Description:
+ * handles file redirection in foreground vs background
+ * redirects to indicated file; 
+ * note: '<' indicates input (read)
+ *     : '>' indicates output (write)
+ * returns 1 if error occurs
+ * returns -1 if exit not reached
+ * @param filename
+ * @param dir
+ * @param bkgd
+ * ***************************************************************************/
+int fileDirInBack() {
+  int file = -5;
+  // attempt to read file, attempt to duplicate, return error if occurs
+  if ((file = open("/dev/null", O_RDONLY)) == -1 || 
+      dup2(file, STDIN_FILENO) == -1 || dup2(file, STDOUT_FILENO) == -1) {
+    perror("error: unable to redirect");
+    exit(1);   // indicates exit 1
+  }
+  return -1;    // indicates no exit
+}
 
-  /*
-     int file = -1;
-     if (bkgd == _true) {
-     file = open("/dev/null", O_RDONLY);
-     }
-     */
+int fileDirInFore(char* filename, char* dir) {
+  int file;
+  if (strcmp(dir, "<") == 0) {    // file input
+    printf("fileDirInFore: %s\n", dir);
+    // attempt to open read file
+    if ((file = open(filename, O_RDONLY)) == -1 || dup2(file, 0) == -1 ) {
+      perror("error: unable to redirect");
+      exit(1);
+    }
+  } else if (strcmp(dir, ">") == 0) { // file output
+    printf("fileDirInFore: %s\n", dir);
+    if ((file = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1 ||
+      dup2(file, 1) == -1) {
+      perror("error: unable to redirect"); 
+      exit(1);
+    }
+  }
+  // close file
+  if (file != -1) fcntl(file, F_SETFD, FD_CLOEXEC);
+  return -1;  // indicate no exit
 }
 
 /* ****************************************************************************
@@ -247,13 +289,12 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
   struct sigaction _action = catch_sigIGN();
 
   int childExitStatus = *status;
-
   // create a fork
   pid_t pid = fork();
   switch(pid) {
     case -1:    // check if error creating child
       perror("error: unable to create child\n");
-      return 1; // exit 1 if error
+      exit(1); // exit 1 if error
       break;
 
     case 0:     // curr is child process
@@ -268,17 +309,25 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
       char* filename = fileDirection(args, n, dir);
       if (filename != NULL) {
         printf("dir: %s\tfilename: %s\n", dir, filename);
+        // handle redirection
+        if (bkgd == _false) {       // redirection in background
+          fileDirInBack();
+        } else if (bkgd == _true) { // redirection in foreground
+          fileDirInFore(filename, dir);
+        }
+        int i = 0; for(; i < n; i++) {
+          free(args[i]);
+          args[i] = NULL;
+        }
       }
-      // handle redirection
-      handlefiledir(filename, dir, bkgd);
 
       // attempt to execute command, print error if occurs
+      // printargs(args);
       if (execvp(args[0], args)) {
-        printf("error: invalid command\n");
+        perror("error: invalid command");
         fflush(stdout);
-        return 1;
+        exit(1);
       }
-      return -1;
       break;
 
     default:    // curr is parent process
@@ -331,7 +380,7 @@ int _runshell(char** args, int n) {
 
   // exit command
   if (strcmp(cmd, EXIT) == 0) {
-    return 0;
+    exit(0);
   }
 
   // cd command
@@ -370,6 +419,19 @@ void freeargs(char** args, int n) {
 }
 
 /* ****************************************************************************
+ * Description: 
+ * used to print argument strings, used to debug
+ * @param args
+ * ***************************************************************************/
+void printargs(char** args) {
+  int i = 0;
+  while (args[i] != NULL) {
+    printf("arg[%d]: %s\n", i, args[i]);
+    i++;
+  }
+}
+
+/* ****************************************************************************
  * main program
  * ***************************************************************************/
 int main() {
@@ -401,7 +463,5 @@ int main() {
     if (exitCode > -1) { exit(exitCode); }
   }
 
-  // kill processes
-  //
   return 0;
 }
