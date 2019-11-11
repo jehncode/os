@@ -214,7 +214,7 @@ char* fileDirection(char** args, int n, char* dir) {
   int i = 0;
   for (; i < n; i++) {
     if ((strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0) && 
-      (i + 1) < n) {
+        (i + 1) < n) {
       dir = args[i];
       return args[i+1];
     }
@@ -225,17 +225,17 @@ char* fileDirection(char** args, int n, char* dir) {
 
 void handlefiledir(char* filename, char* dir, enum _bool bkgd) {
   /*
-  int file = -1;
-  if (bkgd == _true) {
-    file = open("/dev/null", O_RDONLY);
-  }
-  */
+     int file = -1;
+     if (bkgd == _true) {
+     file = open("/dev/null", O_RDONLY);
+     }
+     */
 }
 
 /* ****************************************************************************
  * Description:
- * creates fork for all other commands, returns 1 if error occurs and -1
- * if exit not reached
+ * creates fork for all other commands, returns exit code-- -1 if error occurs 
+ * and -1 if exit not reached
  * @param args
  * @param n
  * @param bkgd
@@ -245,15 +245,16 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
   // signal catcher
   struct sigaction _action = catch_sigIGN();
 
-  int stat = *status;
+  int childExitStatus = *status;
 
   // create a fork
   pid_t pid = fork();
-
+  int ret = -1;
   switch(pid) {
     case -1:    // check if error creating child
       perror("error: unable to create child\n");
       return 1; // exit 1 if error
+      break;
 
     case 0:     // curr is child process
       // stop as foreground process
@@ -262,38 +263,42 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
         sigaction(SIGINT, &_action, NULL);
         // printf("terminated: %d\n", pid);
       }
-      
+
       // get filename if process redirects directory
       char* dir = NULL;   // ">" or "<"
       char* filename = fileDirection(args, n, dir);
       if (filename != NULL) {
-        break; 
       }
       // handle redirection
-      printf("dir: %s %s\n", dir, filename);
       handlefiledir(filename, dir, bkgd);
+
+      // attempt to execute command, print error if occurs
+      if (execvp(args[0], args)) {
+        printf("error: invalid command\n");
+        return 1;
+      }
+      return -1;
+      break;
 
     default:    // curr is parent process
       if (bkgd == _true) {   // on background
+        waitpid(pid, &childExitStatus, WNOHANG);
         // print background pid
         printf("background pid is %d\n", (int) pid);
       } else {               // on foreground
         // wait for process to finish
-        printf("wait for pid %d to finish\n", (int) pid);
-        waitpid(pid, &stat, 0);
+        waitpid(pid, &childExitStatus, 0);
         // check if signal terminated process
-        signalstatus(stat);
-        
-        // background processes
-        do {
-          printf("background process %d is done\n", (int) pid);
-          showStatus(stat);
-          pid = waitpid(-1, &stat, WNOHANG);
-        } while (pid > 0);
+        signalstatus(childExitStatus);
       }
-      break;
   }
-
+  // background processes
+  /*
+  while ((pid = waitpid(-1, &childExitStatus, WNOHANG)) > 0) {
+    printf("background process %d is done\n", (int) pid);
+    showStatus(childExitStatus);
+  }
+*/
   return -1;
 }
 
@@ -349,7 +354,7 @@ int _runshell(char** args, int n) {
 
   // all other commands induces fork()
   int res = _fork(args, n, bkgd, &status);
-  // if (res == -1) return 1;
+//  if (res == -1) return 1;
 
   return res;
 }
