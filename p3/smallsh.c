@@ -56,10 +56,10 @@ struct sigaction catch_sigSTGTSTP();
 void catchSignal();
 
 // smallsh prog
-int _runshell(char** args, int n);
+void _runshell(char** args, int n);
 char* getcmd();
 char** parseInput(int* n, char* input);
-int _fork(char** args, int n, enum _bool bkgd, int* status);
+void _fork(char** args, int n, enum _bool bkgd, int* status);
 
 // status cmd
 void showStatus(int childExitInteger);
@@ -222,7 +222,7 @@ char* fileDirection(char** args, int n, char* dir) {
   for (; i < n; i++) {
     if ((strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0) && 
         (i + 1) < n) {
-      dir = strcpy(dir, args[i]);
+      strcpy(dir, args[i]);
       return args[i+1];
     }
   }
@@ -265,7 +265,7 @@ int fileDirInFore(char* filename, char* dir) {
   } else if (strcmp(dir, ">") == 0) { // file output
     printf("fileDirInFore: %s\n", dir);
     if ((file = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1 ||
-      dup2(file, 1) == -1) {
+        dup2(file, 1) == -1) {
       perror("error: unable to redirect"); 
       exit(1);
     }
@@ -284,11 +284,10 @@ int fileDirInFore(char* filename, char* dir) {
  * @param bkgd
  * @param status
  * ***************************************************************************/
-int _fork(char** args, int n, enum _bool bkgd, int* status) {
+void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
   // signal catcher
   struct sigaction _action = catch_sigIGN();
 
-  int childExitStatus = *status;
   // create a fork
   pid_t pid = fork();
   switch(pid) {
@@ -308,7 +307,6 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
       char dir[2] ;   // ">" or "<"
       char* filename = fileDirection(args, n, dir);
       if (filename != NULL) {
-        printf("dir: %s\tfilename: %s\n", dir, filename);
         // handle redirection
         if (bkgd == _false) {       // redirection in background
           fileDirInBack();
@@ -332,22 +330,22 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
 
     default:    // curr is parent process
       if (bkgd == _true) {   // on background
-        waitpid(pid, &childExitStatus, WNOHANG);
+        waitpid(pid, childExitStatus, WNOHANG);
         // print background pid
         printf("background pid is %d\n", (int) pid);
       } else {               // on foreground
         // wait for process to finish
-        waitpid(pid, &childExitStatus, 0);
+        waitpid(pid, childExitStatus, 0);
         // check if signal terminated process
-        signalstatus(childExitStatus);
+        signalstatus(*childExitStatus);
       }
+        // background processes
+        while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
+          printf("background process %d is done\n", (int) pid);
+          showStatus(*childExitStatus);
+        }
+        break;
   }
-  // background processes
-  while ((pid = waitpid(-1, &childExitStatus, WNOHANG)) > 0) {
-    printf("background process %d is done\n", (int) pid);
-    showStatus(childExitStatus);
-  }
-  return -1;
 }
 
 /* ****************************************************************************
@@ -359,11 +357,10 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
  * @param args
  * @param n
  * ***************************************************************************/
-int _runshell(char** args, int n) {
-  int ret = -1;
+void _runshell(char** args, int n) {
   // check for invalid arguments
   if (args == NULL || n < 1) {
-    return ret;
+    return;
   }
 
   enum _bool bkgd = _false; // track if background process
@@ -372,7 +369,8 @@ int _runshell(char** args, int n) {
   // check if background
   if (strcmp(args[n - 1], "&") == 0) {
     bkgd = _true;
-    n--;
+    free(args[n - 1]);
+    args[--n] = NULL;
   }
 
   // execute supported commands
@@ -384,24 +382,19 @@ int _runshell(char** args, int n) {
   }
 
   // cd command
-  int cd_cmd = strcmp(cmd, CD) == 0;
-  if (cd_cmd) {
+  if (strcmp(cmd, CD) == 0) {
     _chdir(args, n);
+    return;
   } 
 
   // status command
-  int status_cmd = strcmp(cmd, STATUS) == 0;
-  if (status_cmd) {
+  if (strcmp(cmd, STATUS) == 0) {
     showStatus(status);
+    return;
   } 
 
-  // return if supported commands entered
-  if (cd_cmd || status_cmd) { 
-    return ret; 
-  }
-
   // all other commands induces fork()
-  return _fork(args, n, bkgd, &status);
+  _fork(args, n, bkgd, &status);
 }
 
 /* ****************************************************************************
@@ -416,6 +409,7 @@ void freeargs(char** args, int n) {
     args[i] = NULL;
   }
   free(args);
+  args = NULL;
 }
 
 /* ****************************************************************************
@@ -447,20 +441,17 @@ int main() {
     if (input[0] == '\0') continue;
 
     // parse command
-    int nArgs;
+    int nArgs = 0;
     char** args = parseInput(&nArgs, input);
 
     // execute shell
-    int exitCode = -1;
-    exitCode = _runshell(args, nArgs);
+    // int exitCode = -1;
+    _runshell(args, nArgs);
 
     // Free the memory allocated by getline() or else memory leak
     free(input);
     input = NULL;
-    freeargs(args, nArgs);
-
-    // exit if smallsh induced an exit
-    if (exitCode > -1) { exit(exitCode); }
+    freeargs(args, ARGBUFF);
   }
 
   return 0;
