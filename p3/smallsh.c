@@ -215,7 +215,7 @@ char* fileDirection(char** args, int n, char* dir) {
   for (; i < n; i++) {
     if ((strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0) && 
         (i + 1) < n) {
-      dir = args[i];
+      dir = strcpy(dir, args[i]);
       return args[i+1];
     }
   }
@@ -224,6 +224,7 @@ char* fileDirection(char** args, int n, char* dir) {
 }
 
 void handlefiledir(char* filename, char* dir, enum _bool bkgd) {
+
   /*
      int file = -1;
      if (bkgd == _true) {
@@ -249,7 +250,6 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
 
   // create a fork
   pid_t pid = fork();
-  int ret = -1;
   switch(pid) {
     case -1:    // check if error creating child
       perror("error: unable to create child\n");
@@ -261,13 +261,13 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
       if (bkgd == _false) {
         _action.sa_handler = SIG_DFL;
         sigaction(SIGINT, &_action, NULL);
-        // printf("terminated: %d\n", pid);
       }
 
       // get filename if process redirects directory
-      char* dir = NULL;   // ">" or "<"
+      char dir[2] ;   // ">" or "<"
       char* filename = fileDirection(args, n, dir);
       if (filename != NULL) {
+        printf("dir: %s\tfilename: %s\n", dir, filename);
       }
       // handle redirection
       handlefiledir(filename, dir, bkgd);
@@ -275,6 +275,7 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
       // attempt to execute command, print error if occurs
       if (execvp(args[0], args)) {
         printf("error: invalid command\n");
+        fflush(stdout);
         return 1;
       }
       return -1;
@@ -293,12 +294,10 @@ int _fork(char** args, int n, enum _bool bkgd, int* status) {
       }
   }
   // background processes
-  /*
   while ((pid = waitpid(-1, &childExitStatus, WNOHANG)) > 0) {
     printf("background process %d is done\n", (int) pid);
     showStatus(childExitStatus);
   }
-*/
   return -1;
 }
 
@@ -353,10 +352,7 @@ int _runshell(char** args, int n) {
   }
 
   // all other commands induces fork()
-  int res = _fork(args, n, bkgd, &status);
-//  if (res == -1) return 1;
-
-  return res;
+  return _fork(args, n, bkgd, &status);
 }
 
 /* ****************************************************************************
