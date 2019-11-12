@@ -242,7 +242,7 @@ char* fileDirection(char** args, int n, char* dir) {
  * @param dir
  * @param bkgd
  * ***************************************************************************/
-int fileDirInBack() {
+void fileDirInBack() {
   int file = -5;
   // attempt to read file, attempt to duplicate, return error if occurs
   if ((file = open("/dev/null", O_RDONLY)) == -1 || 
@@ -250,29 +250,38 @@ int fileDirInBack() {
     perror("error: unable to redirect");
     exit(1);   // indicates exit 1
   }
-  return -1;    // indicates no exit
 }
 
-int fileDirInFore(char* filename, char* dir) {
+void fileDirInFore(char* filename, char* dir) {
   int file;
   if (strcmp(dir, "<") == 0) {    // file input
-    printf("fileDirInFore: %s\n", dir);
     // attempt to open read file
-    if ((file = open(filename, O_RDONLY)) == -1 || dup2(file, 0) == -1 ) {
+    file = open(filename, O_RDONLY);
+    if (file == -1) {
+      printf("cannot open %s for input\n", filename);
+      exit(1);
+    }
+    // unable to create duplicate
+    if (dup2(file, 0) == -1 ) {
       perror("error: unable to redirect");
       exit(1);
     }
   } else if (strcmp(dir, ">") == 0) { // file output
-    printf("fileDirInFore: %s\n", dir);
-    if ((file = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1 ||
-        dup2(file, 1) == -1) {
+    // attempt to open write file
+    file = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    // unable to open
+    if (file == -1) {
+      printf("cannot open %s for output\n", filename);
+      exit(1);
+    }
+    // unable to create duplicate
+    if (dup2(file, 1) == -1) {
       perror("error: unable to redirect"); 
       exit(1);
     }
   }
   // close file
   if (file != -1) fcntl(file, F_SETFD, FD_CLOEXEC);
-  return -1;  // indicate no exit
 }
 
 /* ****************************************************************************
@@ -308,12 +317,13 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
       char* filename = fileDirection(args, n, dir);
       if (filename != NULL) {
         // handle redirection
-        if (bkgd == _false) {       // redirection in background
-          fileDirInBack();
-        } else if (bkgd == _true) { // redirection in foreground
+        if (bkgd == _false) {       // redirection in foreground
           fileDirInFore(filename, dir);
+        } else if (bkgd == _true) { // redirection in background
+          fileDirInBack();
         }
-        int i = 0; for(; i < n; i++) {
+        // remove remaining args prior to running execvp
+        int i = 1; for(; i < n; i++) {
           free(args[i]);
           args[i] = NULL;
         }
@@ -321,7 +331,8 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
 
       // attempt to execute command, print error if occurs
       // printargs(args);
-      if (execvp(args[0], args)) {
+      int exec = execvp(args[0], args);
+      if (exec == -1) {
         perror("error: invalid command");
         fflush(stdout);
         exit(1);
@@ -329,22 +340,23 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
       break;
 
     default:    // curr is parent process
-      if (bkgd == _true) {   // on background
+      if (bkgd == _true) {          // on background
         waitpid(pid, childExitStatus, WNOHANG);
         // print background pid
         printf("background pid is %d\n", (int) pid);
-      } else {               // on foreground
+        fflush(stdout);
+      } else if (bkgd == _false) {  // on foreground
         // wait for process to finish
         waitpid(pid, childExitStatus, 0);
         // check if signal terminated process
         signalstatus(*childExitStatus);
       }
-        // background processes
-        while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
-          printf("background process %d is done\n", (int) pid);
-          showStatus(*childExitStatus);
-        }
-        break;
+  // background processes
+  while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
+    printf("background process %d is done\n", (int) pid);
+    showStatus(*childExitStatus);
+  }
+      break;
   }
 }
 
