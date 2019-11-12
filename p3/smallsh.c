@@ -48,6 +48,8 @@ enum _bool {
 /* ****************************************************************************
  * function declarations
  * ***************************************************************************/
+enum _bool fgOnly = _false;
+
 // signal control
 void catchSIGINT(int signo);
 void catchSIGTSTP(int signo);
@@ -110,7 +112,13 @@ void catchSIGINT(int signo) {
 
 // catch CTRL+Z (foreground only)
 void catchSIGTSTP(int signo) {
-  printf("\nExiting foreground-only mode\n");
+  if (fgOnly == _false) {  // foreground-only mode
+    printf("\nEntering foreground-only mode (& is now ignored)\n");
+    fgOnly = _true;
+  } else {
+    printf("\nExiting foreground-only mode\n");
+    fgOnly = _false;
+  }
 }
 
 
@@ -340,22 +348,22 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
       break;
 
     default:    // curr is parent process
-      if (bkgd == _true) {          // on background
+      if (bkgd == _true && fgOnly == _false) {          // on background
         waitpid(pid, childExitStatus, WNOHANG);
         // print background pid
-        printf("background pid is %d\n", (int) pid);
+        printf("background pid is %d\n", pid);
         fflush(stdout);
-      } else if (bkgd == _false) {  // on foreground
+      } else {  // on foreground
         // wait for process to finish
         waitpid(pid, childExitStatus, 0);
         // check if signal terminated process
         signalstatus(*childExitStatus);
       }
-  // background processes
-  while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
-    printf("background process %d is done\n", (int) pid);
-    showStatus(*childExitStatus);
-  }
+      // background processes
+      while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
+        printf("background process %d is done: ", pid);
+        showStatus(*childExitStatus);
+      }
       break;
   }
 }
