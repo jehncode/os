@@ -88,6 +88,7 @@ void catchSignal() {
 
 // catcher for CTRL+Z
 struct sigaction catch_sigSTGTSTP() {
+  // taken from lecture notes --initialize values for sigaction
   static struct sigaction SIGSTOP_action = {{0}};
   SIGSTOP_action.sa_handler = catchSIGTSTP;
   sigfillset(&SIGSTOP_action.sa_mask);
@@ -98,6 +99,7 @@ struct sigaction catch_sigSTGTSTP() {
 
 // catcher for CTRL+C
 struct sigaction catch_sigIGN() {
+  // taken from lecture notes --initialize values for sigaction
   static struct sigaction SIGINT_action = {{0}};
   SIGINT_action.sa_handler = SIG_IGN;
   sigfillset(&SIGINT_action.sa_mask);
@@ -112,15 +114,14 @@ void catchSIGINT(int signo) {
 
 // catch CTRL+Z (foreground only)
 void catchSIGTSTP(int signo) {
-  if (fgOnly == _false) {  // foreground-only mode
+  if (fgOnly == _false) {  // enter foreground-only mode
     printf("\nEntering foreground-only mode (& is now ignored)\n");
     fgOnly = _true;
-  } else {
+  } else {                  // exit foreground-only mode
     printf("\nExiting foreground-only mode\n");
     fgOnly = _false;
   }
 }
-
 
 /* ****************************************************************************
  * Description:
@@ -206,7 +207,7 @@ char* getcmd() {
  * @param input
  * ***************************************************************************/
 char** parseInput(int* nArgs, char* input) {
-  // get segments
+  // get segments for command arguments
   int n = 0;    // idx for segments in input;
   char** args = malloc(sizeof(char*) * ARGBUFF);
   char* token = strtok(input, " \n");
@@ -214,6 +215,12 @@ char** parseInput(int* nArgs, char* input) {
     // duplicate argument to args list
     char* curr = malloc(sizeof(char) * BUFFER);
     sprintf(curr, "%s", token);
+    // check for variable expansion--pid
+    if (strcmp(curr, "$$") == 0) {
+      // replace with pid
+      sprintf(curr, "%d", getpid());
+    }
+
     args[n++] = curr;
 
     // update token
@@ -228,14 +235,15 @@ char** parseInput(int* nArgs, char* input) {
 char* fileDirection(char** args, int n, char* dir) {
   int i = 0;
   for (; i < n; i++) {
+    // find indicator for file input/output redirection
     if ((strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0) && 
         (i + 1) < n) {
+      // once found, track filename and direction type
       strcpy(dir, args[i]);
-      return args[i+1];
+      return args[i+1]; // return file name
     }
   }
-
-  return NULL;
+  return NULL;  // file direction not found (does not occur)
 }
 
 /* ****************************************************************************
@@ -255,6 +263,7 @@ void fileDirInBack() {
   // attempt to read file, attempt to duplicate, return error if occurs
   if ((file = open("/dev/null", O_RDONLY)) == -1 || 
       dup2(file, STDIN_FILENO) == -1 || dup2(file, STDOUT_FILENO) == -1) {
+    // unable to open file/redirect
     perror("error: unable to redirect");
     exit(1);   // indicates exit 1
   }
@@ -263,13 +272,14 @@ void fileDirInBack() {
 void fileDirInFore(char* filename, char* dir) {
   int file;
   if (strcmp(dir, "<") == 0) {    // file input
-    // attempt to open read file
+    // attempt to open read file so print error and exit
     file = open(filename, O_RDONLY);
+    // unable to open read file so print error and exit
     if (file == -1) {
       printf("cannot open %s for input\n", filename);
       exit(1);
     }
-    // unable to create duplicate
+    // unable to create duplicate so print error and exit
     if (dup2(file, 0) == -1 ) {
       perror("error: unable to redirect");
       exit(1);
@@ -277,12 +287,12 @@ void fileDirInFore(char* filename, char* dir) {
   } else if (strcmp(dir, ">") == 0) { // file output
     // attempt to open write file
     file = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    // unable to open
+    // unable to open so print error and exit
     if (file == -1) {
       printf("cannot open %s for output\n", filename);
       exit(1);
     }
-    // unable to create duplicate
+    // unable to create duplicate so print error and exit
     if (dup2(file, 1) == -1) {
       perror("error: unable to redirect"); 
       exit(1);
@@ -305,7 +315,7 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
   // signal catcher
   struct sigaction _action = catch_sigIGN();
 
-  // create a fork
+  // create a fork for process
   pid_t pid = fork();
   switch(pid) {
     case -1:    // check if error creating child
@@ -324,7 +334,7 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
       char dir[2] ;   // ">" or "<"
       char* filename = fileDirection(args, n, dir);
       if (filename != NULL) {
-        // handle redirection
+        // handle file redirection
         if (bkgd == _false) {       // redirection in foreground
           fileDirInFore(filename, dir);
         } else if (bkgd == _true) { // redirection in background
@@ -348,7 +358,7 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
       break;
 
     default:    // curr is parent process
-      if (bkgd == _true && fgOnly == _false) {          // on background
+      if (bkgd == _true) {          // on background
         waitpid(pid, childExitStatus, WNOHANG);
         // print background pid
         printf("background pid is %d\n", pid);
@@ -359,12 +369,12 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
         // check if signal terminated process
         signalstatus(*childExitStatus);
       }
-      // background processes
-      while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
-        printf("background process %d is done: ", pid);
-        showStatus(*childExitStatus);
-      }
       break;
+  }
+  // background processes
+  while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
+    printf("background process %d is done: ", pid);
+    showStatus(*childExitStatus);
   }
 }
 
@@ -386,24 +396,26 @@ void _runshell(char** args, int n) {
   enum _bool bkgd = _false; // track if background process
   static int status = 0;    // status code
 
-  // check if background
-  if (strcmp(args[n - 1], "&") == 0) {
-    bkgd = _true;
-    free(args[n - 1]);
+  // check if background process and if it can be background process
+  if (strcmp(args[n - 1], "&") == 0 && fgOnly == _false) {
+    bkgd = _true;   // if so, assign it to background
+    free(args[n - 1]);  // remove last argument: "&" for remainder of this run 
     args[--n] = NULL;
   }
 
-  // execute supported commands
+  // check if executed is a supported commands
   char* cmd = args[0];
 
   // exit command
   if (strcmp(cmd, EXIT) == 0) {
+    // exit status 0
     exit(0);
   }
 
   // cd command
   if (strcmp(cmd, CD) == 0) {
-    _chdir(args, n);
+    // change directory
+    _chdir(args, n);  // chdir command
     return;
   } 
 
@@ -423,11 +435,13 @@ void _runshell(char** args, int n) {
  * @param n
  * ***************************************************************************/
 void freeargs(char** args, int n) {
+  // free each string
   int i = 0;
   for (; i < n; i++) {
     free(args[i]);
     args[i] = NULL;
   }
+  // free the pointer to the array of strings
   free(args);
   args = NULL;
 }
@@ -465,7 +479,6 @@ int main() {
     char** args = parseInput(&nArgs, input);
 
     // execute shell
-    // int exitCode = -1;
     _runshell(args, nArgs);
 
     // Free the memory allocated by getline() or else memory leak
