@@ -26,16 +26,10 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-#define BUFFER 256
-#define ARGBUFF 32 
+#define BUFFER 2048
+#define ARGBUFF 512 
 
-/* ****************************************************************************
- * struct/enum definitions
- * ***************************************************************************/
-enum _bool {
-  _true,
-  _false
-};
+#define STKMAX 512
 
 /* ****************************************************************************
  * definitions for strings/supported commands
@@ -46,22 +40,39 @@ enum _bool {
 #define STATUS "status"
 
 /* ****************************************************************************
- * function declarations
+ * struct/enum definitions
+ * ***************************************************************************/
+enum _bool {
+  _true,
+  _false
+};
+
+/* ****************************************************************************
+ * global variables
  * ***************************************************************************/
 enum _bool fgOnly = _false;
+static struct sigaction stopsig = {{0}};
+static struct sigaction termsig = {{0}};
 
+/* ****************************************************************************
+ * function declarations
+ * ***************************************************************************/
 // signal control
-void catchSIGINT(int signo);
-void catchSIGTSTP(int signo);
-struct sigaction catch_sigIGN();
-struct sigaction catch_sigSTGTSTP();
 void catchSignal();
+void catch_stopsig();
+void catch_termsig();
+void catch_childsig();
+void _catchtermsig(int signo);
+void _catchstopsig(int signo);
+void _catchchildsig(int signo);
+void resetsigaction();
 
 // smallsh prog
-void _runshell(char** args, int n);
+void _runshell(char** args, int n, char* infile, char* outfile);
 char* getcmd();
-char** parseInput(int* n, char* input);
-void _fork(char** args, int n, enum _bool bkgd, int* status);
+char** parseInput(int* n, char* input, char* infile, char* outfile);
+void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus,
+    char* infile, char* outfile);
 
 // status cmd
 void showStatus(int childExitInteger);
@@ -71,6 +82,9 @@ void signalstatus(int childExitInteger);
 // file directory
 void _chfile(char** args, int n);
 
+// file redirection
+int fileDirection(char* infile, char* outfile);
+
 // memory control
 void freeargs(char** args, int n);
 
@@ -79,41 +93,32 @@ void printargs(char** args);
 
 /* ****************************************************************************
  * Description:
- * catches/ignores signals sent by CTRL+C and CTRL+V
- * ***************************************************************************/
+ * initializes signal handlers for stop, term, and child
+ * * ***************************************************************************/
 void catchSignal() {
-  catch_sigIGN();
-  catch_sigSTGTSTP();
+  catch_stopsig();
+  catch_termsig();
+  resetsigaction();
 }
 
-// catcher for CTRL+Z
-struct sigaction catch_sigSTGTSTP() {
+// handler for stop (ctrl+z)
+void catch_stopsig() {
   // taken from lecture notes --initialize values for sigaction
-  static struct sigaction SIGSTOP_action = {{0}};
-  SIGSTOP_action.sa_handler = catchSIGTSTP;
-  sigfillset(&SIGSTOP_action.sa_mask);
-  SIGSTOP_action.sa_flags = SA_RESTART;
-  sigaction(SIGTSTP, &SIGSTOP_action, NULL);
-  return SIGSTOP_action;
+  stopsig.sa_handler = _catchstopsig;
+  sigfillset(&stopsig.sa_mask);
+  stopsig.sa_flags = 0;
 }
 
-// catcher for CTRL+C
-struct sigaction catch_sigIGN() {
+// handler for term (ctrl+c)
+void catch_termsig() {
   // taken from lecture notes --initialize values for sigaction
-  static struct sigaction SIGINT_action = {{0}};
-  SIGINT_action.sa_handler = SIG_IGN;
-  sigfillset(&SIGINT_action.sa_mask);
-  SIGINT_action.sa_flags = SA_RESTART;
-  sigaction(SIGINT, &SIGINT_action, NULL);
-  return SIGINT_action;
+  termsig.sa_handler = SIG_IGN;
+  sigfillset(&termsig.sa_mask);
+  termsig.sa_flags = 0;
 }
 
-// catch CTRL+C
-void catchSIGINT(int signo) {
-}
-
-// catch CTRL+Z (foreground only)
-void catchSIGTSTP(int signo) {
+// catch stop signal CTRL+Z (foreground only)
+void _catchstopsig(int signo) {
   if (fgOnly == _false) {  // enter foreground-only mode
     printf("\nEntering foreground-only mode (& is now ignored)\n");
     fgOnly = _true;
@@ -121,8 +126,19 @@ void catchSIGTSTP(int signo) {
     printf("\nExiting foreground-only mode\n");
     fgOnly = _false;
   }
+  fflush(stdout);
 }
 
+// catch CTRL+C
+void _catchtermsig(int signo) {
+  printf("terminated by signal %d\n", signo);
+}
+
+// reset signal actions for stop, term, and child
+void resetsigaction() {
+  sigaction(SIGTSTP, &stopsig, NULL);
+  sigaction(SIGINT, &termsig, NULL);
+}
 /* ****************************************************************************
  * Description:
  * Displays exit/signaled status to shell
@@ -178,6 +194,11 @@ void _chdir(char** args, int n) {
  * @param input
  * ***************************************************************************/
 char* getcmd() {
+  // clear input/output command line buffers
+  fflush(stdout);
+  fflush(stdin);
+
+  // get input
   char* input = NULL;
   size_t buffer = 0; // Holds how large the allocated buffer is
   int chars = -5;   // number of chars entered
@@ -204,25 +225,47 @@ char* getcmd() {
  * Description:
  * Parses string considering ' ' and returns segments input
  * and stores number of segments
+ * @param nArgs
  * @param input
  * ***************************************************************************/
-char** parseInput(int* nArgs, char* input) {
+char** parseInput(int* nArgs, char* input, char* infile, char* outfile) {
+  // reset file names
+  strcpy(infile, "\0");
+  strcpy(outfile, "\0");
+
   // get segments for command arguments
   int n = 0;    // idx for segments in input;
   char** args = malloc(sizeof(char*) * ARGBUFF);
   char* token = strtok(input, " \n");
   while(token != NULL) {
-    // duplicate argument to args list
-    char* curr = malloc(sizeof(char) * BUFFER);
-    sprintf(curr, "%s", token);
-    // check for variable expansion--pid
-    if (strcmp(curr, "$$") == 0) {
-      // replace with pid
-      sprintf(curr, "%d", getpid());
+    // check if # for comment
+    if (token[0] == '#') {
+      break;
     }
 
-    args[n++] = curr;
+    // check for variable expansion--pid
+    if (strcmp(token, "$$") == 0) {
+      // replace with pid
+      sprintf(token, "%d", getpid());
 
+      // check for file redirection
+    } else if (strcmp(token, "<") == 0) {
+      token = strtok(NULL, " ");
+      strcpy(infile, token);
+
+      // check for file redirection
+    } else if (strcmp(token, ">") == 0) {
+      token = strtok(NULL, " ");
+      strcpy(outfile, token);
+
+    // duplicate argument to args list
+    } else {
+      char* curr = malloc(sizeof(char) * BUFFER);
+      sprintf(curr, "%s", token);
+
+      // save segment of argument for return
+      args[n++] = curr;
+    }
     // update token
     token = strtok(NULL, " \n");
   }
@@ -232,120 +275,76 @@ char** parseInput(int* nArgs, char* input) {
   return args;
 }
 
-char* fileDirection(char** args, int n, char* dir) {
-  int i = 0;
-  for (; i < n; i++) {
-    // find indicator for file input/output redirection
-    if ((strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0) && 
-        (i + 1) < n) {
-      // once found, track filename and direction type
-      strcpy(dir, args[i]);
-      return args[i+1]; // return file name
-    }
-  }
-  return NULL;  // file direction not found (does not occur)
-}
-
 /* ****************************************************************************
  * Description:
- * handles file redirection in foreground vs background
- * redirects to indicated file; 
- * note: '<' indicates input (read)
- *     : '>' indicates output (write)
- * returns 1 if error occurs
- * returns -1 if exit not reached
- * @param filename
- * @param dir
- * @param bkgd
+ * check if there is a file direction in command, sets direction if occurs
+ * and returns 1 if redirection occurs, 0 otherwise
+ * @param infile
+ * @param outfile
  * ***************************************************************************/
-void fileDirInBack() {
-  int file = -5;
-  // attempt to read file, attempt to duplicate, return error if occurs
-  if ((file = open("/dev/null", O_RDONLY)) == -1 || 
-      dup2(file, STDIN_FILENO) == -1 || dup2(file, STDOUT_FILENO) == -1) {
-    // unable to open file/redirect
-    perror("error: unable to redirect");
-    exit(1);   // indicates exit 1
+int fileDirection(char* infile, char* outfile) {
+  int res = 0;
+  // handle file redirection 
+  // input file
+  if (strcmp(infile, "") != 0) {
+    // attempt to open file
+    int file = open(infile, O_RDONLY);
+    // check if file is opened/dup made
+    if (file == -1 || dup2(file, 0) == -1) {
+      perror("error: unable to access file");
+      exit(1);
+    }
+    // update return value
+    res = 1;
+    // close file
+    fcntl(file, F_SETFD, FD_CLOEXEC);
   }
-}
 
-void fileDirInFore(char* filename, char* dir) {
-  int file;
-  if (strcmp(dir, "<") == 0) {    // file input
-    // attempt to open read file so print error and exit
-    file = open(filename, O_RDONLY);
-    // unable to open read file so print error and exit
-    if (file == -1) {
-      printf("cannot open %s for input\n", filename);
+  // output file
+  if (strcmp(outfile, "") != 0) {
+    // attempt to open file
+    int file = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    // check if file is opened/dup made
+    if (file == -1 || dup2(file, 1) == -1) {
+      perror("error: unable to access file");
       exit(1);
-    }
-    // unable to create duplicate so print error and exit
-    if (dup2(file, 0) == -1 ) {
-      perror("error: unable to redirect");
-      exit(1);
-    }
-  } else if (strcmp(dir, ">") == 0) { // file output
-    // attempt to open write file
-    file = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    // unable to open so print error and exit
-    if (file == -1) {
-      printf("cannot open %s for output\n", filename);
-      exit(1);
-    }
-    // unable to create duplicate so print error and exit
-    if (dup2(file, 1) == -1) {
-      perror("error: unable to redirect"); 
-      exit(1);
-    }
+    } 
+    // update return value
+    res = 1;
+    // close file
+    fcntl(file, F_SETFD, FD_CLOEXEC);
   }
-  // close file
-  if (file != -1) fcntl(file, F_SETFD, FD_CLOEXEC);
+
+  return res;
 }
 
 /* ****************************************************************************
  * Description:
- * creates fork for all other commands, returns exit code-- -1 if error occurs 
- * and -1 if exit not reached
+ * creates fork for all other commands
  * @param args
  * @param n
  * @param bkgd
- * @param status
+ * @param childExitStatus
+ * @param infile
+ * @param outfile
  * ***************************************************************************/
-void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
-  // signal catcher
-  struct sigaction _action = catch_sigIGN();
-
+void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus,
+    char* infile, char* outfile) {
   // create a fork for process
   pid_t pid = fork();
   switch(pid) {
     case -1:    // check if error creating child
-      perror("error: unable to create child\n");
+      perror("error: unable to create fork\n");
       exit(1); // exit 1 if error
       break;
 
     case 0:     // curr is child process
-      // stop as foreground process
-      if (bkgd == _false) {
-        _action.sa_handler = SIG_DFL;
-        sigaction(SIGINT, &_action, NULL);
-      }
+      // handle child process process
+      termsig.sa_handler = SIG_DFL;
+      sigaction(SIGINT, &termsig, NULL);
 
-      // get filename if process redirects directory
-      char dir[2] ;   // ">" or "<"
-      char* filename = fileDirection(args, n, dir);
-      if (filename != NULL) {
-        // handle file redirection
-        if (bkgd == _false) {       // redirection in foreground
-          fileDirInFore(filename, dir);
-        } else if (bkgd == _true) { // redirection in background
-          fileDirInBack();
-        }
-        // remove remaining args prior to running execvp
-        int i = 1; for(; i < n; i++) {
-          free(args[i]);
-          args[i] = NULL;
-        }
-      }
+      // handle file redirects
+      fileDirection(infile, outfile);
 
       // attempt to execute command, print error if occurs
       // printargs(args);
@@ -358,7 +357,7 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
       break;
 
     default:    // curr is parent process
-      if (bkgd == _true) {          // on background
+      if (bkgd == _true && fgOnly == _false) {          // on background
         waitpid(pid, childExitStatus, WNOHANG);
         // print background pid
         printf("background pid is %d\n", pid);
@@ -369,25 +368,24 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus) {
         // check if signal terminated process
         signalstatus(*childExitStatus);
       }
-      break;
-  }
-  // background processes
-  while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
-    printf("background process %d is done: ", pid);
-    showStatus(*childExitStatus);
+      // background processes
+      while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
+        printf("background process %d is done: ", pid);
+        showStatus(*childExitStatus);
+        fflush(stdout);
+      }
   }
 }
 
 /* ****************************************************************************
  * Description:
- * runs shell program and executes user's commands, returns exit code:
- * -1 if exit not reached
- * 0 if terminated using exit command
- * 1 if error occurs
+ * runs shell program and executes user's commands
  * @param args
  * @param n
+ * @param infile
+ * @param outfile
  * ***************************************************************************/
-void _runshell(char** args, int n) {
+void _runshell(char** args, int n, char* infile, char* outfile) {
   // check for invalid arguments
   if (args == NULL || n < 1) {
     return;
@@ -426,7 +424,7 @@ void _runshell(char** args, int n) {
   } 
 
   // all other commands induces fork()
-  _fork(args, n, bkgd, &status);
+  _fork(args, n, bkgd, &status, infile, outfile);
 }
 
 /* ****************************************************************************
@@ -470,19 +468,30 @@ int main() {
 
   // get command & run shell
   while(1) {   // from lecture notes
+    // reset signal handler
+    resetsigaction();
+
     // Get input from the user
     input = getcmd();
     if (input[0] == '\0') continue;
 
     // parse command
     int nArgs = 0;
-    char** args = parseInput(&nArgs, input);
+    char* infile = malloc(sizeof(char) * BUFFER);
+    memset(infile, sizeof(infile), '\0');
+    char* outfile = malloc(sizeof(char) * BUFFER);
+    memset(outfile, sizeof(outfile), '\0' );
+    char** args = parseInput(&nArgs, input, infile, outfile);
 
     // execute shell
-    _runshell(args, nArgs);
+    _runshell(args, nArgs, infile, outfile);
 
-    // Free the memory allocated by getline() or else memory leak
+    // Free the memory allocated or else memory leak
+    free(infile);
+    free(outfile);
     free(input);
+    infile = NULL;
+    outfile = NULL;
     input = NULL;
     freeargs(args, ARGBUFF);
   }
