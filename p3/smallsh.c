@@ -61,10 +61,7 @@ static struct sigaction termsig = {{0}};
 void catchSignal();
 void catch_stopsig();
 void catch_termsig();
-void catch_childsig();
-void _catchtermsig(int signo);
 void _catchstopsig(int signo);
-void _catchchildsig(int signo);
 void resetsigaction();
 
 // smallsh prog
@@ -93,7 +90,7 @@ void printargs(char** args);
 
 /* ****************************************************************************
  * Description:
- * initializes signal handlers for stop, term, and child
+ * initializes signal handlers for stop and term
  * * ***************************************************************************/
 void catchSignal() {
   catch_stopsig();
@@ -103,7 +100,7 @@ void catchSignal() {
 
 // handler for stop (ctrl+z)
 void catch_stopsig() {
-  // taken from lecture notes --initialize values for sigaction
+  // taken from lecture notes --initialize values for stopsig
   stopsig.sa_handler = _catchstopsig;
   sigfillset(&stopsig.sa_mask);
   stopsig.sa_flags = 0;
@@ -111,8 +108,8 @@ void catch_stopsig() {
 
 // handler for term (ctrl+c)
 void catch_termsig() {
-  // taken from lecture notes --initialize values for sigaction
-  termsig.sa_handler = SIG_IGN;
+  // taken from lecture notes --initialize values for termsig
+  termsig.sa_handler = SIG_IGN; // ignore
   sigfillset(&termsig.sa_mask);
   termsig.sa_flags = 0;
 }
@@ -129,12 +126,7 @@ void _catchstopsig(int signo) {
   fflush(stdout);
 }
 
-// catch CTRL+C
-void _catchtermsig(int signo) {
-  printf("terminated by signal %d\n", signo);
-}
-
-// reset signal actions for stop, term, and child
+// reset signal actions for stop and term
 void resetsigaction() {
   sigaction(SIGTSTP, &stopsig, NULL);
   sigaction(SIGINT, &termsig, NULL);
@@ -149,6 +141,7 @@ void showStatus(int childExitInteger) {
   exitstatus(childExitInteger);
   // process terminated by a signal
   signalstatus(childExitInteger);
+  fflush(stdout);
 }
 
 // prints status if exited normally
@@ -403,8 +396,10 @@ void _runshell(char** args, int n, char* infile, char* outfile) {
   static int status = 0;    // status code
 
   // check if background process and if it can be background process
-  if (strcmp(args[n - 1], "&") == 0 && fgOnly == _false) {
-    bkgd = _true;   // if so, assign it to background
+  if (strcmp(args[n - 1], "&") == 0) {
+    if (fgOnly == _false) {
+      bkgd = _true;   // if so, assign it to background
+    }
     free(args[n - 1]);  // remove last argument: "&" for remainder of this run 
     args[--n] = NULL;
   }
@@ -477,7 +472,7 @@ int main() {
   // get command & run shell
   while(1) {   // from lecture notes
     // reset signal handler
-    // resetsigaction();
+    resetsigaction();
 
     // Get input from the user
     input = getcmd();
