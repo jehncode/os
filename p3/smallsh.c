@@ -238,18 +238,14 @@ char** parseInput(int* nArgs, char* input, char* infile, char* outfile) {
   char** args = malloc(sizeof(char*) * ARGBUFF);
   char* token = strtok(input, " \n");
   while(token != NULL) {
+
     // check if # for comment
     if (token[0] == '#') {
       break;
     }
 
-    // check for variable expansion--pid
-    if (strcmp(token, "$$") == 0) {
-      // replace with pid
-      sprintf(token, "%d", getpid());
-
-      // check for file redirection
-    } else if (strcmp(token, "<") == 0) {
+    // check for file redirection
+    if (strcmp(token, "<") == 0) {
       token = strtok(NULL, " ");
       strcpy(infile, token);
 
@@ -258,10 +254,20 @@ char** parseInput(int* nArgs, char* input, char* infile, char* outfile) {
       token = strtok(NULL, " ");
       strcpy(outfile, token);
 
-    // duplicate argument to args list
+      // duplicate argument to args list
     } else {
+      // save token as segment
       char* curr = malloc(sizeof(char) * BUFFER);
       sprintf(curr, "%s", token);
+
+      // check for variable expansion--pid
+      char* needleptr = strstr(curr, "$$");
+      if (needleptr != NULL) {
+        // printf("needleptr: %s\n", needleptr);
+        needleptr[0] = '\0';
+        // replace with pid
+        sprintf(curr, "%s%d", curr, getpid());
+      }
 
       // save segment of argument for return
       args[n++] = curr;
@@ -271,6 +277,8 @@ char** parseInput(int* nArgs, char* input, char* infile, char* outfile) {
   }
 
   *nArgs = n;
+  fflush(stdout);
+  fflush(stdin);
   // printargs(args);
   return args;
 }
@@ -368,7 +376,7 @@ void _fork(char** args, int n, enum _bool bkgd, int* childExitStatus,
         // check if signal terminated process
         signalstatus(*childExitStatus);
       }
-      // background processes
+      // run through background processes
       while ((pid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
         printf("background process %d is done: ", pid);
         showStatus(*childExitStatus);
@@ -469,7 +477,7 @@ int main() {
   // get command & run shell
   while(1) {   // from lecture notes
     // reset signal handler
-    resetsigaction();
+    // resetsigaction();
 
     // Get input from the user
     input = getcmd();
