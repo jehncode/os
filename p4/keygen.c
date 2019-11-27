@@ -33,10 +33,10 @@ int main(int argc, char* argv[]) {
     //              // will remain if random num generated == 26
 
     // generate random number to determine if ch is uppercase alpha
-    int r = (random() % 26);
+    int r = (random() % 27);  // random num btwm 0 and 26 (inclusive)
 
     // determine if random letter is alpha
-    if (r != 27) {
+    if (r != 26) {
       ch = 'A' + r;
     }
 
