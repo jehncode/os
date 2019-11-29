@@ -26,6 +26,35 @@
 #define HOST "localhost"
 
 /* ****************************************************************************
+ * function declarations
+ * ***************************************************************************/
+int validText(char*, int);
+void error(const char*);
+
+/* ****************************************************************************
+ * Description:
+ * returns 1 if text contains contains valid characters only
+ * valid characters include:
+ *    space
+ *    uppercase alphas
+ * returns 0 otherwise
+ * @param text
+ * @param n
+ * ***************************************************************************/
+int validText(char* text, int n) {
+  int i = 0;
+  for (; i < n; i++) {
+    char ch = text[i];
+    // if not space nor uppercase alpha
+    if (ch != ' ' && isupper(ch) == 0) {
+      printf("char: \'%c\' is invalid", ch);
+      return 0;   // result: invalid
+    }
+  }
+  return 1;   // result: valid
+}
+
+/* ****************************************************************************
  * Description:
  * print error message and exit
  * ***************************************************************************/
@@ -38,7 +67,6 @@ void error(const char* msg) { perror(msg); exit(0); }
 int main(int argc, char* argv[]) {
   // print error if invalid number of arguments is provided
   if (argc < 4) {
-    printf("error: please provide required arguments\n");
     printf("USAGE:  %s plaintext key port\n", argv[0]);
     exit(0);
   }
@@ -48,8 +76,10 @@ int main(int argc, char* argv[]) {
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
   char buffer[BUFFER];
-  // clear memory
+  char keybuff[BUFFER];
+  // clear memory for usage
   memset(buffer, '\0', sizeof(buffer)); // clear buffer
+  memset(keybuff, '\0', sizeof(keybuff)); // clear buffer
   memset((char*) &serverAddress, '\0', sizeof(serverAddress)); // clear stuct 
   
   // set up socket
@@ -70,14 +100,23 @@ int main(int argc, char* argv[]) {
   if (connect(socketFD, addr, sizeof(*addr)) < 0)
     error("CLIENT error: unable to connect");
 
-  // open plaintext file
-  FILE* plaintext = fopen(argv[1], "r");
-  if (plaintext < 0) error("error: unable to open file");
+  // get plain text from file
+  FILE* textfile = fopen(argv[1], "r");
+  if (textfile < 0) error("error: unable to open text file");
   // get input from plaintext file
-  while (fgets(buffer, sizeof(buffer) - 1, plaintext));
-  fclose(plaintext);  // close file
-  // remove trailing \n that fgets adds
-  buffer[strcspn(buffer, "\n")] = '%';
+  while (fgets(buffer, sizeof(buffer) - 1, textfile));
+  fclose(textfile);  // close file
+  buffer[strcspn(buffer, "\n")] = '\0'; // remove trailing \n that fgets adds
+  printf("plaintext:\n%s\n", buffer); // for debugging
+
+  // get key from file
+  FILE* keyfile = fopen(argv[2], "r");
+  if (keyfile < 0) error("error: unable to open key file");
+  // get input from plaintext file
+  while (fgets(keybuff, sizeof(keybuff) - 1, keyfile));
+  fclose(keyfile);  // close file
+  keybuff[strcspn(keybuff, "\n")] = '\0'; // remove trailing \n that fgets adds
+  printf("key:\t%s\n", buffer); // for debugging
 
   // send message to server
   charsWritten = send(socketFD, buffer, strlen(buffer), 0);
