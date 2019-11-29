@@ -2,14 +2,15 @@
  * Name:    Jenny Huang
  * Date:    November 26, 2019
  * Description: opt_enc.c
- * This program connects to otp_enc_d and asks it to perform a one-time pad
- * style encryption.
+ * This program is run in the background as a daemon. An error is printed if
+ * it can't be run due to a network error, such as the ports being unavailable
+ * This program performs the actual encoding for OTP.
+ * This program listens to a particular port/socket and accepts when a 
+ * connection is requested. This program supports up to five concurrent 
+ * socket connections running at the same time.
  * This program is ran as follows:
- *    otp_enc plaintext key port
+ *    otp_enc_d port &
  * where 
- *    plaintext is the name of the file in the current directory that contains
- *        the plaintext to be encrypted
- *    key contains the encryption key used to encrypt the text
  *    port is the port that the program attemps to connect otp_enc_d on
  * **************************************************************************/
 
@@ -28,30 +29,42 @@
 /* ****************************************************************************
  * function declarations
  * ***************************************************************************/
-int validText(char*, int);
+void encrypt(char*, int, char*, int);
+int chtoval(char);
+char valtoch(int);
+
 void error(const char*);
 
 /* ****************************************************************************
  * Description:
- * returns 1 if text contains contains valid characters only
- * valid characters include:
- *    space
- *    uppercase alphas
- * returns 0 otherwise
+ * encrypts text considering OTP
  * @param text
  * @param n
+ * @param key
+ * @param k
  * ***************************************************************************/
-int validText(char* text, int n) {
+void encrypt(char* text, int n, char* key, int k) {
+  printf("key:\n%s\n", key);
+  printf("plain text:\n%s\n", text);
   int i = 0;
   for (; i < n; i++) {
-    char ch = text[i];
-    // if not space nor uppercase alpha
-    if (ch != ' ' && isupper(ch) == 0) {
-      printf("char: \'%c\' is invalid", ch);
-      return 0;   // result: invalid
-    }
+    int val = chtoval(text[i]) + chtoval(key[i % k]);
+    text[i] = valtoch(val);
   }
-  return 1;   // result: valid
+
+  printf("cipher text:\n%s\n", text);
+}
+
+// helper function to return value of character for encryption
+int chtoval(char ch) {
+  if (ch == ' ') return 26;
+  return (int) (ch - 'A') % 26;
+}
+
+// helper function to return char of value
+char valtoch(int val) {
+  if (val == 26) return ' ';
+  return (char) (val % 26 + 'A');
 }
 
 /* ****************************************************************************
@@ -65,6 +78,34 @@ void error(const char* msg) { perror(msg); exit(0); }
  * main program
  * ***************************************************************************/
 int main(int argc, char* argv[]) {
+  if (argc < 3) { printf("USAGE:  %s plaintext key\n", argv[0]); exit(0); }
+
+  char buffer[BUFFER];
+  char keybuff[BUFFER];
+  // clear memory for usage
+  memset(buffer, '\0', sizeof(buffer)); // clear buffer
+  memset(keybuff, '\0', sizeof(keybuff)); // clear buffer
+
+  // get plain text from file
+  FILE* textfile = fopen(argv[1], "r");
+  if (textfile < 0) error("error: unable to open text file");
+  // get input from plaintext file
+  while (fgets(buffer, sizeof(buffer) - 1, textfile));
+  fclose(textfile);  // close file
+  buffer[strcspn(buffer, "\n")] = '\0'; // remove trailing \n that fgets adds
+  int n = strlen(buffer); 
+  
+  // get key from file
+  FILE* keyfile = fopen(argv[2], "r");
+  if (keyfile < 0) error("error: unable to open key file");
+  // get input from plaintext file
+  while (fgets(keybuff, sizeof(keybuff) - 1, keyfile));
+  fclose(keyfile);  // close file
+  keybuff[strcspn(keybuff, "\n")] = '\0'; // remove trailing \n that fgets adds
+  int k = strlen(keybuff);
+  
+  encrypt(buffer, n, keybuff, k);
+  /*
   // print error if invalid number of arguments is provided
   if (argc < 4) {
     printf("USAGE:  %s plaintext key port\n", argv[0]);
@@ -133,6 +174,6 @@ int main(int argc, char* argv[]) {
 
   // close the socket
   close(socketFD);
-
+*/
   return 0;
 }
