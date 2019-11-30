@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
 
   // receive encoded text
   recvMessage(buffer, sizeof(buffer), socketFD);
-  printf("CLIENT received ciphertext: \"%s\"\n", buffer);
+  printf("%s\n", buffer);
 
   // close the socket
   close(socketFD);

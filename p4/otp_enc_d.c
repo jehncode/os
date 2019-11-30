@@ -47,10 +47,15 @@ void encrypt(char* text, char* key) {
   int n = strlen(text);
   int k = strlen(key);
 
+  if (n > k) { 
+    fprintf(stderr, "error: key is too short\n", key);
+    exit(1);
+  }
+
   // printf("key:\n%s\n", key);  printf("plain text:\n%s\n", text);
   int i = 0;
   for (; i < n; i++) {
-    int val = chtoval(text[i]) + chtoval(key[i % k]);
+    int val = chtoval(text[i]) + chtoval(key[i]);
     text[i] = valtoch(val);
   }
   // printf("cipher text:\n%s\n", text);
@@ -146,14 +151,14 @@ int main(int argc, char* argv[]) {
   // Flip the socket on - it can now receive up to 5 connections
   listen(listenSocketFD, 5);
 
-
-//  while (1) {
+  int status = -5;
+  while (1) {
     // accept connection, blocking if one isn't available until one connects
     sizeOfClientInfo = sizeof(clientAddress); // Get the size of the address 
     establishedConnectionFD = accept(listenSocketFD, 
         (struct sockaddr*)&clientAddress, &sizeOfClientInfo);  // accept
     if (establishedConnectionFD < 0) error("error: unable to accept");
-/*
+
     // fork request
     pid_t pid = fork();
     switch (pid) {
@@ -161,35 +166,33 @@ int main(int argc, char* argv[]) {
         error("error: unable to create fork");
         break;
       case 0:  // successful: get plaintext/key from client, send ciphertext 
-      */
-        memset(buffer, '\0', sizeof(buffer));
-        //
         // Read the client's message from the socket
 
         // read plaintext
         recvMessage(buffer, sizeof(buffer), establishedConnectionFD);
-        printf("SERVER received plaintext: %s\n", buffer);
-
+        // printf("SERVER received plaintext: %s\n", buffer);
         // read key
         recvMessage(key, sizeof(key), establishedConnectionFD);
-        printf("SERVER received key: %s\n", key);
+        // printf("SERVER received key: %s\n", key);
 
         // encrypt plaintext
         encrypt(buffer, key);
-        printf("SERVER ciphertext: %s\n", buffer);
+        // printf("SERVER ciphertext: %s\n", buffer);
 
         // write ciphertext to socket
         sendMessage(buffer, establishedConnectionFD);
 
         close(establishedConnectionFD); // Close the existing socket which is connected to the client
-        close(listenSocketFD); // Close the listening socket
-        /*
         break;
-      default:
+      default:  // parent process
+        close(establishedConnectionFD);
+        while (pid > 0) {
+          pid = waitpid(-1, &status, WNOHANG);
+        }
         break;
     }
   }
-  */
+  close(listenSocketFD); // Close the listening socket
 
   return 0;
 }
