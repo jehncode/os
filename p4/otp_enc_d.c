@@ -29,7 +29,7 @@
 /* ****************************************************************************
  * function declarations
  * ***************************************************************************/
-void encrypt(char*, int, char*, int);
+void encrypt(char*, char*);
 int chtoval(char);
 char valtoch(int);
 
@@ -43,16 +43,17 @@ void error(const char*);
  * @param key
  * @param k
  * ***************************************************************************/
-void encrypt(char* text, int n, char* key, int k) {
-  printf("key:\n%s\n", key);
-  printf("plain text:\n%s\n", text);
+void encrypt(char* text, char* key) {
+  int n = strlen(text);
+  int k = strlen(key);
+
+  // printf("key:\n%s\n", key);  printf("plain text:\n%s\n", text);
   int i = 0;
   for (; i < n; i++) {
     int val = chtoval(text[i]) + chtoval(key[i % k]);
     text[i] = valtoch(val);
   }
-
-  printf("cipher text:\n%s\n", text);
+  // printf("cipher text:\n%s\n", text);
 }
 
 // helper function to return value of character for encryption
@@ -65,6 +66,21 @@ int chtoval(char ch) {
 char valtoch(int val) {
   if (val == 26) return ' ';
   return (char) (val % 26 + 'A');
+}
+
+
+/* ****************************************************************************
+ * Description:
+ * send message from server
+ * @param buffer
+ * @param establishedConnectionFD
+ * ***************************************************************************/
+int sendMessage(char* buffer, int establishedConnectionFD) {
+  int charsWritten = send(establishedConnectionFD, buffer, strlen(buffer), 0);
+  if (charsWritten < 0) error("SERVER error: unable to write to socket");
+  if (charsWritten < strlen(buffer))
+    printf("SERVER warning: not all data written to socket\n");
+  return charsWritten;
 }
 
 /* ****************************************************************************
@@ -82,9 +98,6 @@ int recvMessage(char* buffer, int n, int establishedConnectionFD) {
   int charsRead = recv(establishedConnectionFD, buffer, n, 0); 
   if (charsRead < 0) error("SERVER error: reading from socket");
   // printf("SERVER: I received this from the client: \"%s\"\n", buffer);
-  // send success message to client
-  // charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); 
-  // if (charsRead < 0) error("SERVER error: writing to socket");
   return charsRead;
 }
 
@@ -107,13 +120,11 @@ int main(int argc, char* argv[]) {
   int listenSocketFD, establishedConnectionFD, portNumber, charsRead;
   socklen_t sizeOfClientInfo;
   char buffer[BUFFER];
-  char plaintext[BUFFER];
   char key[BUFFER];
   struct sockaddr_in serverAddress, clientAddress;
 
   // clear memory
   memset(buffer, '\0', sizeof(buffer));
-  memset(plaintext, '\0', sizeof(plaintext));
   memset(key, '\0', sizeof(key));
   memset((char *)&serverAddress, '\0', sizeof(serverAddress)); // Clear address
 
@@ -135,53 +146,50 @@ int main(int argc, char* argv[]) {
   // Flip the socket on - it can now receive up to 5 connections
   listen(listenSocketFD, 5);
 
-  // while (1) {
-  // accept connection, blocking if one isn't available until one connects
-  sizeOfClientInfo = sizeof(clientAddress); // Get the size of the address 
-  establishedConnectionFD = accept(listenSocketFD, 
-      (struct sockaddr*)&clientAddress, &sizeOfClientInfo);  // accept
-  if (establishedConnectionFD < 0) error("error: unable to accept");
 
-  // fork request
-  //
-  /*
-     pid_t pid = fork();
-     switch (pid) {
-     case -1:  // error 
-     error("error: unable to create fork");
-     break;
-     case 0:  // successful: get message from client and display it
-     memset(buffer, '\0', sizeof(buffer));
-  // Read the client's message from the socket
-  charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0); 
+//  while (1) {
+    // accept connection, blocking if one isn't available until one connects
+    sizeOfClientInfo = sizeof(clientAddress); // Get the size of the address 
+    establishedConnectionFD = accept(listenSocketFD, 
+        (struct sockaddr*)&clientAddress, &sizeOfClientInfo);  // accept
+    if (establishedConnectionFD < 0) error("error: unable to accept");
+/*
+    // fork request
+    pid_t pid = fork();
+    switch (pid) {
+      case -1:  // error 
+        error("error: unable to create fork");
+        break;
+      case 0:  // successful: get plaintext/key from client, send ciphertext 
+      */
+        memset(buffer, '\0', sizeof(buffer));
+        //
+        // Read the client's message from the socket
 
-  if (charsRead < 0) error("ERROR reading from socket");
-  printf("SERVER: I received this from the client: \"%s\"\n", buffer);
-  // send success message to client
-  charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-  if (charsRead < 0) error("error: writing to socket");
-  close(establishedConnectionFD); // Close the existing socket which is connected to the client
-  memset(buffer, '\0', sizeof(buffer));
-  charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0);
+        // read plaintext
+        recvMessage(buffer, sizeof(buffer), establishedConnectionFD);
+        printf("SERVER received plaintext: %s\n", buffer);
 
-  close(listenSocketFD); // Close the listening socket
-  break;
-  default:
-  break;
+        // read key
+        recvMessage(key, sizeof(key), establishedConnectionFD);
+        printf("SERVER received key: %s\n", key);
+
+        // encrypt plaintext
+        encrypt(buffer, key);
+        printf("SERVER ciphertext: %s\n", buffer);
+
+        // write ciphertext to socket
+        sendMessage(buffer, establishedConnectionFD);
+
+        close(establishedConnectionFD); // Close the existing socket which is connected to the client
+        close(listenSocketFD); // Close the listening socket
+        /*
+        break;
+      default:
+        break;
+    }
   }
   */
-  // read plain text
-  recvMessage(plaintext, sizeof(plaintext), establishedConnectionFD);
-  printf("SERVER received plaintest: %s\n", plaintext);
-
-  // read key
-  recvMessage(key, sizeof(key), establishedConnectionFD);
-  printf("SERVER received key: %s\n", key);
-
-  close(establishedConnectionFD); // Close the existing socket which is connected to the client
-  close(listenSocketFD); // Close the listening socket
-  // }
-
 
   return 0;
 }

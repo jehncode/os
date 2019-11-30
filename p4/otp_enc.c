@@ -77,7 +77,7 @@ void readfromfile(char* buffer, int n, char* filename) {
  * ***************************************************************************/
 int sendMessage(char* buffer, int socketFD) {
   int charsWritten = send(socketFD, buffer, strlen(buffer), 0);
-  if (charsWritten < 0) error("CLIENT error: unable to write text to socket");
+  if (charsWritten < 0) error("CLIENT error: unable to write to socket");
   if (charsWritten < strlen(buffer)) 
     printf("CLIENT warning: not all data written to socket\n");
 
@@ -93,7 +93,7 @@ int recvMessage(char* buffer, int n, int socketFD) {
   // read data from the socket, leaving \0 at end
   int charsRead = recv(socketFD, buffer, n - 1, 0);
   if (charsRead < 0) error("CLIENT ERROR: unable to read from socket");
-  printf("CLIENT: received from server: \"%s\"\n", buffer);
+  // printf("CLIENT: received from server: \"%s\"\n", buffer);
 
   return charsRead;
 }
@@ -145,20 +145,18 @@ int main(int argc, char* argv[]) {
     error("CLIENT error: unable to connect");
 
   // get plain text from file
-  char* textfile = argv[1];
-  readfromfile(buffer, BUFFER, textfile);
-
-  // send plain text message to server
+  readfromfile(buffer, BUFFER, argv[1]);
+  // send plaintext message to server
   sendMessage(buffer, socketFD);
-  // charsRead = recvMessage(buffer, BUFFER, socketFD); // get return message from server
 
   // get key from file
-  char* keyfile = argv[2];
-  readfromfile(buffer, BUFFER, keyfile);
-
+  readfromfile(buffer, BUFFER, argv[2]);
   // send key to server
   sendMessage(buffer, socketFD);
-  // charsRead = recvMessage(buffer, BUFFER, socketFD); // get return message from server
+
+  // receive encoded text
+  recvMessage(buffer, sizeof(buffer), socketFD);
+  printf("CLIENT received ciphertext: \"%s\"\n", buffer);
 
   // close the socket
   close(socketFD);
