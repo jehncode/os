@@ -88,7 +88,7 @@ int sendMessage(char* buffer, int socketFD) {
  * Description:
  * ***************************************************************************/
 int recvMessage(char* buffer, int n, int socketFD) {
-  // get return message from server
+  // get message from server
   memset(buffer, '\0', n);
   // read data from the socket, leaving \0 at end
   int charsRead = recv(socketFD, buffer, n - 1, 0);
@@ -149,16 +149,16 @@ int main(int argc, char* argv[]) {
   readfromfile(buffer, BUFFER, textfile);
 
   // send plain text message to server
-  charsWritten = sendMessage(buffer, socketFD);
-  charsRead = recvMessage(buffer, BUFFER, socketFD); // get return message from server
+  sendMessage(buffer, socketFD);
+  // charsRead = recvMessage(buffer, BUFFER, socketFD); // get return message from server
 
   // get key from file
   char* keyfile = argv[2];
   readfromfile(buffer, BUFFER, keyfile);
 
   // send key to server
-  charsWritten = sendMessage(buffer, socketFD);
-  charsRead = recvMessage(buffer, BUFFER, socketFD); // get return message from server
+  sendMessage(buffer, socketFD);
+  // charsRead = recvMessage(buffer, BUFFER, socketFD); // get return message from server
 
   // close the socket
   close(socketFD);

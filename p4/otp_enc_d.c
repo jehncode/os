@@ -69,6 +69,27 @@ char valtoch(int val) {
 
 /* ****************************************************************************
  * Description:
+ * get message from server
+ * @param buffer
+ * @param n
+ * @param establishedConnectionFD
+ * ***************************************************************************/
+int recvMessage(char* buffer, int n, int establishedConnectionFD) {
+  // clear memory of buffer
+  memset(buffer, '\0', n);
+
+  // Read the client's message from the socket
+  int charsRead = recv(establishedConnectionFD, buffer, n, 0); 
+  if (charsRead < 0) error("SERVER error: reading from socket");
+  // printf("SERVER: I received this from the client: \"%s\"\n", buffer);
+  // send success message to client
+  // charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); 
+  // if (charsRead < 0) error("SERVER error: writing to socket");
+  return charsRead;
+}
+
+/* ****************************************************************************
+ * Description:
  * print error message and exit
  * ***************************************************************************/
 void error(const char* msg) { perror(msg); exit(0); }
@@ -86,10 +107,17 @@ int main(int argc, char* argv[]) {
   int listenSocketFD, establishedConnectionFD, portNumber, charsRead;
   socklen_t sizeOfClientInfo;
   char buffer[BUFFER];
+  char plaintext[BUFFER];
+  char key[BUFFER];
   struct sockaddr_in serverAddress, clientAddress;
 
+  // clear memory
+  memset(buffer, '\0', sizeof(buffer));
+  memset(plaintext, '\0', sizeof(plaintext));
+  memset(key, '\0', sizeof(key));
+  memset((char *)&serverAddress, '\0', sizeof(serverAddress)); // Clear address
+
   // set up address struct for process
-  memset((char *)&serverAddress, '\0', sizeof(serverAddress)); // Clear out the address struct
   portNumber = atoi(argv[1]); // Get the port number, convert to an integer from a string
   serverAddress.sin_family = AF_INET; // Create a network-capable socket
   serverAddress.sin_port = htons(portNumber); // Store the port number
@@ -108,64 +136,50 @@ int main(int argc, char* argv[]) {
   listen(listenSocketFD, 5);
 
   // while (1) {
-    // accept connection, blocking if one isn't available until one connects
-    sizeOfClientInfo = sizeof(clientAddress); // Get the size of the address 
-    establishedConnectionFD = accept(listenSocketFD, 
-        (struct sockaddr*)&clientAddress, &sizeOfClientInfo);  // accept
-    if (establishedConnectionFD < 0) error("error: unable to accept");
+  // accept connection, blocking if one isn't available until one connects
+  sizeOfClientInfo = sizeof(clientAddress); // Get the size of the address 
+  establishedConnectionFD = accept(listenSocketFD, 
+      (struct sockaddr*)&clientAddress, &sizeOfClientInfo);  // accept
+  if (establishedConnectionFD < 0) error("error: unable to accept");
 
-    // fork request
-    //
-    /*
-       pid_t pid = fork();
-       switch (pid) {
-       case -1:  // error 
-       error("error: unable to create fork");
-       break;
-       case 0:  // successful: get message from client and display it
-       memset(buffer, '\0', sizeof(buffer));
-    // Read the client's message from the socket
-    charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0); 
+  // fork request
+  //
+  /*
+     pid_t pid = fork();
+     switch (pid) {
+     case -1:  // error 
+     error("error: unable to create fork");
+     break;
+     case 0:  // successful: get message from client and display it
+     memset(buffer, '\0', sizeof(buffer));
+  // Read the client's message from the socket
+  charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0); 
 
-    if (charsRead < 0) error("ERROR reading from socket");
-    printf("SERVER: I received this from the client: \"%s\"\n", buffer);
-    // send success message to client
-    charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-    if (charsRead < 0) error("error: writing to socket");
-    close(establishedConnectionFD); // Close the existing socket which is connected to the client
-    memset(buffer, '\0', sizeof(buffer));
-    charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0);
+  if (charsRead < 0) error("ERROR reading from socket");
+  printf("SERVER: I received this from the client: \"%s\"\n", buffer);
+  // send success message to client
+  charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
+  if (charsRead < 0) error("error: writing to socket");
+  close(establishedConnectionFD); // Close the existing socket which is connected to the client
+  memset(buffer, '\0', sizeof(buffer));
+  charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0);
 
-    close(listenSocketFD); // Close the listening socket
-    break;
-    default:
-    break;
-    }
-    */
+  close(listenSocketFD); // Close the listening socket
+  break;
+  default:
+  break;
+  }
+  */
+  // read plain text
+  recvMessage(plaintext, sizeof(plaintext), establishedConnectionFD);
+  printf("SERVER received plaintest: %s\n", plaintext);
 
-    // read plain text
-    memset(buffer, '\0', sizeof(buffer));
-    // Read the client's message from the socket
-    charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0); 
+  // read key
+  recvMessage(key, sizeof(key), establishedConnectionFD);
+  printf("SERVER received key: %s\n", key);
 
-    if (charsRead < 0) error("SERVER error: reading from socket");
-    printf("SERVER: I received this from the client: \"%s\"\n", buffer);
-    // send success message to client
-    charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-    if (charsRead < 0) error("SERVER error: writing to socket");
-
-
-    // read key
-    memset(buffer, '\0', sizeof(buffer));
-    charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0);
-    if (charsRead < 0) error("SERVER error: unable to read from socket");
-    printf("SERVER: I received this from the client: \"%s\"\n", buffer);
-    // send success message to client
-    charsRead = send(establishedConnectionFD, "SERVER: I got your message", 39, 0); // Send success back
-    if (charsRead < 0) error("SERVER error: unable to write to socket");
-
-    close(establishedConnectionFD); // Close the existing socket which is connected to the client
-    close(listenSocketFD); // Close the listening socket
+  close(establishedConnectionFD); // Close the existing socket which is connected to the client
+  close(listenSocketFD); // Close the listening socket
   // }
 
 
