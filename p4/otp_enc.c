@@ -56,6 +56,50 @@ int validText(char* text, int n) {
 
 /* ****************************************************************************
  * Description:
+ * ***************************************************************************/
+void readfromfile(char* buffer, int n, char* filename) {
+  memset(buffer, '\0', n);
+  
+  FILE* fi = fopen(filename, "r");
+  if (fi < 0) error("error: unable to open text file");
+  // get input from plaintext file
+  // printf("sizeofbuffer: %d\n", sizeof(buffer));
+  while (fgets(buffer, n - 1, fi)) {
+  };
+  fclose(fi);  // close file
+  buffer[strcspn(buffer, "\n")] = '\0'; // remove trailing \n that fgets adds
+  // printf("read from %s :\n%s\n", filename, buffer); // for debugging
+}
+
+/* ****************************************************************************
+ * Description:
+ * print error message and exit
+ * ***************************************************************************/
+int sendMessage(char* buffer, int socketFD) {
+  int charsWritten = send(socketFD, buffer, strlen(buffer), 0);
+  if (charsWritten < 0) error("CLIENT error: unable to write text to socket");
+  if (charsWritten < strlen(buffer)) 
+    printf("CLIENT warning: not all data written to socket\n");
+
+  return charsWritten;
+}
+
+/* ****************************************************************************
+ * Description:
+ * ***************************************************************************/
+int recvMessage(char* buffer, int n, int socketFD) {
+  // get return message from server
+  memset(buffer, '\0', n);
+  // read data from the socket, leaving \0 at end
+  int charsRead = recv(socketFD, buffer, n - 1, 0);
+  if (charsRead < 0) error("CLIENT ERROR: unable to read from socket");
+  printf("CLIENT: received from server: \"%s\"\n", buffer);
+
+  return charsRead;
+}
+
+/* ****************************************************************************
+ * Description:
  * print error message and exit
  * ***************************************************************************/
 void error(const char* msg) { perror(msg); exit(0); }
@@ -101,35 +145,20 @@ int main(int argc, char* argv[]) {
     error("CLIENT error: unable to connect");
 
   // get plain text from file
-  FILE* textfile = fopen(argv[1], "r");
-  if (textfile < 0) error("error: unable to open text file");
-  // get input from plaintext file
-  while (fgets(buffer, sizeof(buffer) - 1, textfile));
-  fclose(textfile);  // close file
-  buffer[strcspn(buffer, "\n")] = '\0'; // remove trailing \n that fgets adds
-  printf("plaintext:\n%s\n", buffer); // for debugging
-  
+  char* textfile = argv[1];
+  readfromfile(buffer, BUFFER, textfile);
+
+  // send plain text message to server
+  charsWritten = sendMessage(buffer, socketFD);
+  charsRead = recvMessage(buffer, BUFFER, socketFD); // get return message from server
+
   // get key from file
-  FILE* keyfile = fopen(argv[2], "r");
-  if (keyfile < 0) error("error: unable to open key file");
-  // get input from plaintext file
-  while (fgets(keybuff, sizeof(keybuff) - 1, keyfile));
-  fclose(keyfile);  // close file
-  keybuff[strcspn(keybuff, "\n")] = '\0'; // remove trailing \n that fgets adds
-  printf("key:\t%s\n", buffer); // for debugging
+  char* keyfile = argv[2];
+  readfromfile(buffer, BUFFER, keyfile);
 
-  // send message to server
-  charsWritten = send(socketFD, buffer, strlen(buffer), 0);
-  if (charsWritten < 0) error("CLIENT error: unable to write to socket");
-  if (charsWritten < strlen(buffer)) 
-    printf("CLIENT warning: not all data written to socket\n");
-
-  // get return message from server
-  memset(buffer, '\0', sizeof(buffer));
-  // read data from the socket, leaving \0 at end
-  charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0);
-  if (charsRead < 0) error("CLIENT ERROR: unable to read from socket");
-  printf("CLIENT: received from server: \"%s\"\n", buffer);
+  // send key to server
+  charsWritten = sendMessage(buffer, socketFD);
+  charsRead = recvMessage(buffer, BUFFER, socketFD); // get return message from server
 
   // close the socket
   close(socketFD);

@@ -78,102 +78,96 @@ void error(const char* msg) { perror(msg); exit(0); }
  * main program
  * ***************************************************************************/
 int main(int argc, char* argv[]) {
-  if (argc < 3) { printf("USAGE:  %s plaintext key\n", argv[0]); exit(0); }
-
-  char buffer[BUFFER];
-  char keybuff[BUFFER];
-  // clear memory for usage
-  memset(buffer, '\0', sizeof(buffer)); // clear buffer
-  memset(keybuff, '\0', sizeof(keybuff)); // clear buffer
-
-  // get plain text from file
-  FILE* textfile = fopen(argv[1], "r");
-  if (textfile < 0) error("error: unable to open text file");
-  // get input from plaintext file
-  while (fgets(buffer, sizeof(buffer) - 1, textfile));
-  fclose(textfile);  // close file
-  buffer[strcspn(buffer, "\n")] = '\0'; // remove trailing \n that fgets adds
-  int n = strlen(buffer); 
-  
-  // get key from file
-  FILE* keyfile = fopen(argv[2], "r");
-  if (keyfile < 0) error("error: unable to open key file");
-  // get input from plaintext file
-  while (fgets(keybuff, sizeof(keybuff) - 1, keyfile));
-  fclose(keyfile);  // close file
-  keybuff[strcspn(keybuff, "\n")] = '\0'; // remove trailing \n that fgets adds
-  int k = strlen(keybuff);
-  
-  encrypt(buffer, n, keybuff, k);
-  /*
-  // print error if invalid number of arguments is provided
-  if (argc < 4) {
-    printf("USAGE:  %s plaintext key port\n", argv[0]);
-    exit(0);
+  if (argc < 2) {
+    fprintf(stderr, "USAGE: %s port\n", argv[0]);
+    exit(1);
   }
-  
-  // initialize variables
-  int socketFD, port, charsWritten, charsRead;
-  struct sockaddr_in serverAddress;
-  struct hostent* serverHostInfo;
+
+  int listenSocketFD, establishedConnectionFD, portNumber, charsRead;
+  socklen_t sizeOfClientInfo;
   char buffer[BUFFER];
-  char keybuff[BUFFER];
-  // clear memory for usage
-  memset(buffer, '\0', sizeof(buffer)); // clear buffer
-  memset(keybuff, '\0', sizeof(keybuff)); // clear buffer
-  memset((char*) &serverAddress, '\0', sizeof(serverAddress)); // clear stuct 
-  
+  struct sockaddr_in serverAddress, clientAddress;
+
+  // set up address struct for process
+  memset((char *)&serverAddress, '\0', sizeof(serverAddress)); // Clear out the address struct
+  portNumber = atoi(argv[1]); // Get the port number, convert to an integer from a string
+  serverAddress.sin_family = AF_INET; // Create a network-capable socket
+  serverAddress.sin_port = htons(portNumber); // Store the port number
+  serverAddress.sin_addr.s_addr = INADDR_ANY; // Any address is allowed for connection to this process
+
   // set up socket
-  serverAddress.sin_family = AF_INET; // create network-capable socket
-  port = atoi(argv[3]); // get port number from argument
-  serverAddress.sin_port = htons(port); // store port number
-  serverHostInfo = gethostbyname(HOST); // convert machine name to special form
-  if (serverHostInfo == NULL) error("CLIENT error: no such host");
-  memcpy((char*) &serverAddress.sin_addr.s_addr, (char*)serverHostInfo->h_addr, 
-    serverHostInfo->h_length);  // copy the address
+  listenSocketFD = socket(AF_INET, SOCK_STREAM, 0); // Create the socket
+  if (listenSocketFD < 0) error("error: unable to open socket");
 
-  // set up the socket
-  socketFD = socket(AF_INET, SOCK_STREAM, 0); // capabilities of full size socket
-  if (socketFD < 0) error("CLIENT error: unable to open socket");
+  // enable socket to begin listening
+  // Connect socket to port
+  if (bind(listenSocketFD, (struct sockaddr *)&serverAddress, 
+        sizeof(serverAddress)) < 0) { error("error: unable to bind"); }
 
-  // connect to server
-  struct sockaddr* addr = (struct sockaddr*)&serverAddress;
-  if (connect(socketFD, addr, sizeof(*addr)) < 0)
-    error("CLIENT error: unable to connect");
+  // Flip the socket on - it can now receive up to 5 connections
+  listen(listenSocketFD, 5);
 
-  // get plain text from file
-  FILE* textfile = fopen(argv[1], "r");
-  if (textfile < 0) error("error: unable to open text file");
-  // get input from plaintext file
-  while (fgets(buffer, sizeof(buffer) - 1, textfile));
-  fclose(textfile);  // close file
-  buffer[strcspn(buffer, "\n")] = '\0'; // remove trailing \n that fgets adds
-  printf("plaintext:\n%s\n", buffer); // for debugging
-  
-  // get key from file
-  FILE* keyfile = fopen(argv[2], "r");
-  if (keyfile < 0) error("error: unable to open key file");
-  // get input from plaintext file
-  while (fgets(keybuff, sizeof(keybuff) - 1, keyfile));
-  fclose(keyfile);  // close file
-  keybuff[strcspn(keybuff, "\n")] = '\0'; // remove trailing \n that fgets adds
-  printf("key:\t%s\n", buffer); // for debugging
+  // while (1) {
+    // accept connection, blocking if one isn't available until one connects
+    sizeOfClientInfo = sizeof(clientAddress); // Get the size of the address 
+    establishedConnectionFD = accept(listenSocketFD, 
+        (struct sockaddr*)&clientAddress, &sizeOfClientInfo);  // accept
+    if (establishedConnectionFD < 0) error("error: unable to accept");
 
-  // send message to server
-  charsWritten = send(socketFD, buffer, strlen(buffer), 0);
-  if (charsWritten < 0) error("CLIENT error: unable to write to socket");
-  if (charsWritten < strlen(buffer)) 
-    printf("CLIENT warning: not all data written to socket\n");
+    // fork request
+    //
+    /*
+       pid_t pid = fork();
+       switch (pid) {
+       case -1:  // error 
+       error("error: unable to create fork");
+       break;
+       case 0:  // successful: get message from client and display it
+       memset(buffer, '\0', sizeof(buffer));
+    // Read the client's message from the socket
+    charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0); 
 
-  // get return message from server
-  memset(buffer, '\0', sizeof(buffer));
-  // read data from the socket, leaving \0 at end
-  charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0);
-  if (charsRead < 0) error("CLIENT ERROR: unable to read from socket");
-  printf("CLIENT: received from server: \"%s\"\n", buffer);
+    if (charsRead < 0) error("ERROR reading from socket");
+    printf("SERVER: I received this from the client: \"%s\"\n", buffer);
+    // send success message to client
+    charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
+    if (charsRead < 0) error("error: writing to socket");
+    close(establishedConnectionFD); // Close the existing socket which is connected to the client
+    memset(buffer, '\0', sizeof(buffer));
+    charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0);
 
-  // close the socket
-  close(socketFD);
-*/
+    close(listenSocketFD); // Close the listening socket
+    break;
+    default:
+    break;
+    }
+    */
+
+    // read plain text
+    memset(buffer, '\0', sizeof(buffer));
+    // Read the client's message from the socket
+    charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0); 
+
+    if (charsRead < 0) error("SERVER error: reading from socket");
+    printf("SERVER: I received this from the client: \"%s\"\n", buffer);
+    // send success message to client
+    charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
+    if (charsRead < 0) error("SERVER error: writing to socket");
+
+
+    // read key
+    memset(buffer, '\0', sizeof(buffer));
+    charsRead = recv(establishedConnectionFD, buffer, BUFFER, 0);
+    if (charsRead < 0) error("SERVER error: unable to read from socket");
+    printf("SERVER: I received this from the client: \"%s\"\n", buffer);
+    // send success message to client
+    charsRead = send(establishedConnectionFD, "SERVER: I got your message", 39, 0); // Send success back
+    if (charsRead < 0) error("SERVER error: unable to write to socket");
+
+    close(establishedConnectionFD); // Close the existing socket which is connected to the client
+    close(listenSocketFD); // Close the listening socket
+  // }
+
+
   return 0;
 }
