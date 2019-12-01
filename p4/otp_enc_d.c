@@ -39,18 +39,11 @@ void error(const char*);
  * Description:
  * encrypts text considering OTP
  * @param text
- * @param n
  * @param key
- * @param k
  * ***************************************************************************/
 void encrypt(char* text, char* key) {
-  int n = strlen(text);
-  int k = strlen(key);
-
-  if (n > k) { 
-    fprintf(stderr, "error: key is too short\n", key);
-    exit(1);
-  }
+  int n = strlen(text); // length of plaintext
+  int k = strlen(key);  // length of key
 
   // printf("key:\n%s\n", key);  printf("plain text:\n%s\n", text);
   int i = 0;
@@ -63,13 +56,17 @@ void encrypt(char* text, char* key) {
 
 // helper function to return value of character for encryption
 int chtoval(char ch) {
+  // if it's a space, the value is 26
   if (ch == ' ') return 26;
+  // otherwise the value based on the character
   return (int) (ch - 'A') % 26;
 }
 
 // helper function to return char of value
 char valtoch(int val) {
+  // if the value is 26, the character is a space
   if (val == 26) return ' ';
+  // otherwise it is based on the value
   return (char) (val % 26 + 'A');
 }
 
@@ -77,20 +74,25 @@ char valtoch(int val) {
 /* ****************************************************************************
  * Description:
  * send message from server
+ * returns return value of send() if error is not encountered
  * @param buffer
  * @param establishedConnectionFD
  * ***************************************************************************/
 int sendMessage(char* buffer, int establishedConnectionFD) {
+  // place message in socket
   int charsWritten = send(establishedConnectionFD, buffer, strlen(buffer), 0);
+  // print error if unable to write to socket
   if (charsWritten < 0) error("SERVER error: unable to write to socket");
+  // print error if not all data was written to socket
   if (charsWritten < strlen(buffer))
-    printf("SERVER warning: not all data written to socket\n");
+    error("SERVER error: not all data written to socket\n");
   return charsWritten;
 }
 
 /* ****************************************************************************
  * Description:
- * get message from server
+ * get message from client 
+ * returns return value of recv() if error is not encountered
  * @param buffer
  * @param n
  * @param establishedConnectionFD
@@ -101,6 +103,7 @@ int recvMessage(char* buffer, int n, int establishedConnectionFD) {
 
   // Read the client's message from the socket
   int charsRead = recv(establishedConnectionFD, buffer, n, 0); 
+  // print error if unable to read from socket
   if (charsRead < 0) error("SERVER error: reading from socket");
   // printf("SERVER: I received this from the client: \"%s\"\n", buffer);
   return charsRead;

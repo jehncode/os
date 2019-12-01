@@ -28,7 +28,7 @@
 /* ****************************************************************************
  * function declarations
  * ***************************************************************************/
-int validText(char*, int);
+int validText(char*);
 void error(const char*);
 
 /* ****************************************************************************
@@ -39,10 +39,10 @@ void error(const char*);
  *    uppercase alphas
  * returns 0 otherwise
  * @param text
- * @param n
  * ***************************************************************************/
-int validText(char* text, int n) {
+int validText(char* text) {
   int i = 0;
+  int n = strlen(text);
   for (; i < n; i++) {
     char ch = text[i];
     // if not space nor uppercase alpha
@@ -62,8 +62,8 @@ void readfromfile(char* buffer, int n, char* filename) {
   
   FILE* fi = fopen(filename, "r");
   if (fi < 0) error("error: unable to open text file");
-  // get input from plaintext file
   // printf("sizeofbuffer: %d\n", sizeof(buffer));
+  // get input from plaintext file
   while (fgets(buffer, n - 1, fi)) {
   };
   fclose(fi);  // close file
@@ -73,19 +73,29 @@ void readfromfile(char* buffer, int n, char* filename) {
 
 /* ****************************************************************************
  * Description:
- * print error message and exit
+ * send message from client
+ * returns return value of send() if error is not encountered
+ * @param buffer
+ * @param socketFD
  * ***************************************************************************/
 int sendMessage(char* buffer, int socketFD) {
+  // place message in socket
   int charsWritten = send(socketFD, buffer, strlen(buffer), 0);
+  // print error if unable to write to socket
   if (charsWritten < 0) error("CLIENT error: unable to write to socket");
+  // print error if not all data was written to socket
   if (charsWritten < strlen(buffer)) 
     printf("CLIENT warning: not all data written to socket\n");
-
   return charsWritten;
 }
 
 /* ****************************************************************************
  * Description:
+ * get message from server
+ * returns return value of recv() if error is not encountered
+ * @param buffer
+ * @param n
+ * @param socketFD
  * ***************************************************************************/
 int recvMessage(char* buffer, int n, int socketFD) {
   // get message from server
@@ -144,13 +154,37 @@ int main(int argc, char* argv[]) {
   if (connect(socketFD, addr, sizeof(*addr)) < 0)
     error("CLIENT error: unable to connect");
 
-  // get plain text from file
-  readfromfile(buffer, BUFFER, argv[1]);
+  // get plaintext from file
+  char* textfile = argv[1];
+  readfromfile(buffer, BUFFER, textfile);
+  // check if valid plaintext
+  if (validText(buffer) == 0) {
+    fprintf(stderr, "error: bad characters in plaintext \'%s\'/n", textfile);
+    exit(1);
+  }
+  // save length for checking lengths of plaintext vs key
+  int n = strlen(buffer);
   // send plaintext message to server
   sendMessage(buffer, socketFD);
 
   // get key from file
-  readfromfile(buffer, BUFFER, argv[2]);
+  char* keyfile = argv[2];
+  readfromfile(buffer, BUFFER, keyfile);
+  // check if valid plaintext
+  if (validText(buffer) == 0) {
+    fprintf(stderr, "error: bad characters in key \'%s\'/n", keyfile);
+    exit(1);
+  }
+
+  // save length for checking lengths of plaintext vs key
+  int k = strlen(buffer);
+  
+  // check if key is long enough
+  if (n > k) { 
+    fprintf(stderr, "error: key \'%s\' is too short\n", keyfile); 
+    exit(1); 
+  }
+
   // send key to server
   sendMessage(buffer, socketFD);
 
