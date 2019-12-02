@@ -39,7 +39,7 @@ int sendMessage(char* buffer, int socketFD) {
   if (charsWritten < 0) error("error: unable to write to socket", 0);
   // print error if not all data was written to socket
   if (charsWritten < strlen(buffer)) 
-    error("error: not all data written to socket", 0);
+    error("error: not all data written to socket", 1);
   return charsWritten;
 }
 
@@ -57,19 +57,8 @@ int recvMessage(char* buffer, int n, int socketFD) {
   // read data from the socket, leaving \0 at end
   int charsRead = recv(socketFD, buffer, n - 1, 0);
   if (charsRead < 0) error("error: unable to read from socket", 0);
-  printf(": received from server: \"%s\"\n", buffer);
+  // printf(": received in socket: \"%s\"\n", buffer);  // debug
   return charsRead;
-}
-
-/* ****************************************************************************
- * Description:
- * set up socket, exit with error if occurs
- * @param socketFD
- * ***************************************************************************/
-void socketSetup(int* socketFD) {
-  *socketFD = socket(AF_INET, SOCK_STREAM, 0); // capabilities of full size socket
-  // print error if socket not created
-  if (*socketFD < 0) error("error: unable to open socket", 0);
 }
 
 /* ****************************************************************************
@@ -82,7 +71,7 @@ void socketConnect(int socketFD, struct sockaddr_in* serverAddress) {
   struct sockaddr* addr = (struct sockaddr*)serverAddress;
   int stat = connect(socketFD, addr, sizeof(*addr));
   // print error if connection isnt made
-  if (stat < 0) { error("error: unable to connect", 0); }
+  if (stat < 0) { error("error: unable to connect", 1); }
 }
 
 /* ****************************************************************************

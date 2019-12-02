@@ -129,8 +129,10 @@ int main(int argc, char* argv[]) {
   // addrSetup(&serverAddress, port);
 
   // set up socket
-  int listenSocketFD, establishedConnectionFD;
-  socketSetup(&listenSocketFD);
+  int listenSocketFD, establishedConnectionFD;  
+  listenSocketFD = socket(AF_INET, SOCK_STREAM, 0); // create socket
+  if (listenSocketFD < 0) error("error: server unable to open socket", 1);
+  //socketSetup(&listenSocketFD);
 
   // enable socket to begin listening
   // Connect socket to port
@@ -160,18 +162,18 @@ int main(int argc, char* argv[]) {
         break;
       case 0:  // successful: get plaintext/key from client, send ciphertext 
         // authenticate client
-        authenticateConnection(ENC_TAG, listenSocketFD);
+        authenticateConnection(ENC_TAG, establishedConnectionFD);
 
         // read plaintext
         recvMessage(buffer, sizeof(buffer), establishedConnectionFD);
-         printf("SERVER received plaintext: %s\n", buffer);
+        // printf("SERVER received plaintext: %s\n", buffer);
         // read key
         recvMessage(key, sizeof(key), establishedConnectionFD);
-         printf("SERVER received key: %s\n", key);
+        // printf("SERVER received key: %s\n", key);
 
         // encrypt plaintext
         encrypt(buffer, key);
-         printf("SERVER ciphertext: %s\n", buffer);
+        // printf("SERVER ciphertext: %s\n", buffer);
 
         // write ciphertext to socket
         sendMessage(buffer, establishedConnectionFD);

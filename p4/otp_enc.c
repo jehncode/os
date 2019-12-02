@@ -144,13 +144,12 @@ int main(int argc, char* argv[]) {
       serverHostInfo->h_length);
 
   // set up the socket w/ capabilities of full-size socket
-  int socketFD;
-  socketSetup(&socketFD);
+  int socketFD = socket(AF_INET, SOCK_STREAM, 0); // create socket
+  if (socketFD < 0) error("error: client unable to open socket", 1);
+  // socketSetup(&socketFD);
 
-  printf("attempting to connect to server\n");
   // connect to server
   socketConnect(socketFD, &serverAddress);
-  printf("attempting to validate connection\n");
   // validate connection
   validateConnection(ENC_TAG, socketFD);
 

@@ -32,7 +32,6 @@ int recvMessage(char*, int, int);
 
 // socket
 // void addressSetup(struct sockaddr_in*, int);
-void socketSetup(int*);
 void socketConnect(int, struct sockaddr_in*);
 
 // prints
