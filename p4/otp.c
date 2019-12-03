@@ -85,7 +85,7 @@ void socketConnect(int socketFD, struct sockaddr_in* serverAddress) {
   struct sockaddr* addr = (struct sockaddr*)serverAddress;
   int stat = connect(socketFD, addr, sizeof(*addr));
   // print error if connection isnt made
-  if (stat < 0) { error("error: unable to connect", 1); }
+  if (stat < 0) { error("error: unable to connect", 0); }
 }
 
 /* ****************************************************************************

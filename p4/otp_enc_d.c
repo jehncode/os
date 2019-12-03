@@ -102,18 +102,18 @@ int main(int argc, char* argv[]) {
   // set up socket
   int listenSocketFD, establishedConnectionFD;  
   listenSocketFD = socket(AF_INET, SOCK_STREAM, 0); // create socket
-  if (listenSocketFD < 0) error("error: server unable to open socket", 1);
+  if (listenSocketFD < 0) error("error: server unable to open socket", 0);
   //socketSetup(&listenSocketFD);
 
   // enable socket to begin listening
   // Connect socket to port
   if (bind(listenSocketFD, (struct sockaddr *)&serverAddress, 
         sizeof(serverAddress)) < 0) 
-    error("error: server unable to bind", 1);
+    error("error: server unable to bind", 0);
 
   // Flip the socket on - it can now receive up to 5 connections
   if (listen(listenSocketFD, 5) < 0) 
-    error("error: server unable to listen", 1);
+    error("error: server unable to listen", 0);
 
   // wait for connection request from client
   int status = -5;
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
     establishedConnectionFD = accept(listenSocketFD, 
         (struct sockaddr*)&clientAddress, &sizeOfClientInfo);  // accept
     if (establishedConnectionFD < 0) 
-      error("error: server unable to accept", 1);
+      error("error: server unable to accept", 0);
 
     // fork request
     pid_t pid = fork();
