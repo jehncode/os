@@ -1,7 +1,7 @@
 /* ****************************************************************************
  * Name:    Jenny Huang
  * Date:    November 26, 2019
- * Description: opt_enc.c
+ * Description: opt_dec_d.c
  * This program is run in the background as a daemon. An error is printed if
  * it can't be run due to a network error, such as the ports being unavailable
  * This program performs the actual encoding for OTP.
@@ -27,26 +27,29 @@
  * function declarations
  * ***************************************************************************/
 // encryption
-void encrypt(char*, char*);
+void decrypt(char*, char*);
 
 void authenticateConnection(char* tag, int socketFD);
 /* ****************************************************************************
  * Description:
- * encrypts text considering OTP
+ * decrypts text considering OTP
  * @param text
  * @param key
  * ***************************************************************************/
-void encrypt(char* text, char* key) {
+void decrypt(char* text, char* key) {
   int n = strlen(text); // length of plaintext
   int k = strlen(key);  // length of key
 
   // printf("key:\n%s\n", key);  printf("plain text:\n%s\n", text);
   int i = 0;
   for (; i < n; i++) {
-    int val = chtoval(text[i]) + chtoval(key[i]);
+    int val = (chtoval(text[i]) - chtoval(key[i]));
+    // check if value is neg
+    if (val < 0) val += 27;
+
     text[i] = valtoch(val);
   }
-  // printf("cipher text:\n%s\n", text);
+  // printf("plain text:\n%s\n", text);
 }
 
 /* ****************************************************************************
@@ -133,7 +136,7 @@ int main(int argc, char* argv[]) {
         break;
       case 0:  // successful: get plaintext/key from client, send ciphertext 
         // authenticate client
-        authenticateConnection(ENC_TAG, establishedConnectionFD);
+        authenticateConnection(DEC_TAG, establishedConnectionFD);
 
         // read plaintext
         recvMessage(buffer, sizeof(buffer), establishedConnectionFD);
@@ -142,11 +145,11 @@ int main(int argc, char* argv[]) {
         recvMessage(key, sizeof(key), establishedConnectionFD);
         // printf("SERVER received key: %s\n", key);
 
-        // encrypt plaintext
-        encrypt(buffer, key);
-        // printf("SERVER ciphertext: %s\n", buffer);
+        // decrypt ciphertext
+        decrypt(buffer, key);
+        // printf("SERVER plaintext: %s\n", buffer);
 
-        // write ciphertext to socket
+        // write plaintext to socket
         sendMessage(buffer, establishedConnectionFD);
 
         close(establishedConnectionFD); // Close the existing socket which is connected to the client

@@ -19,11 +19,25 @@
 #include <netdb.h>
 
 #define BUFFER 2048
-#define PROGTAG "otp_enc"
 #define HOST "localhost"
 // connection validity
 #define ACCEPT "accepted"
 #define REJECT "rejected"
+
+// function to return value of character
+int chtoval(char ch) {
+  // if it's a space, the value is 26
+  if (ch == ' ') return 26;
+  // otherwise the value is based on the character
+  return (int) (ch - 'A');
+}
+// function to return char of value
+char valtoch(int val) {
+  // if value is 26, character is space
+  if (val == 26) return ' ';
+  // otherwise it's based on the value
+  return (char) (val % 27 + 'A');
+}
 
 /* ****************************************************************************
  * Description:

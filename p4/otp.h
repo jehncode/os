@@ -21,10 +21,14 @@
 #define BUFFER 2048
 #define HOST "localhost"
 #define ENC_TAG "otp_enc"
+#define DEC_TAG "otp_dec"
 // connection validity
 #define ACCEPT "accepted"
 #define REJECT "rejected"
 
+// character int conversion
+int chtoval(char);
+char valtoch(int);
 
 // socket correspondence
 int sendMessage(char*, int);

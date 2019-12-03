@@ -2,3 +2,5 @@
 gcc -o keygen keygen.c
 gcc -o otp_enc otp.c otp_enc.c
 gcc -o otp_enc_d otp.c otp_enc_d.c
+gcc -o otp_dec otp.c otp_dec.c
+gcc -o otp_dec_d otp.c otp_dec_d.c
